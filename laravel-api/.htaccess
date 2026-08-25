@@ -1,0 +1,6 @@
+# Blocks direct Apache access to laravel-api/ when served under htdocs.
+# The app is reached only through `php artisan serve` (port 8000) during
+# development, or via a dedicated vhost/alias pointing at public/ later.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>

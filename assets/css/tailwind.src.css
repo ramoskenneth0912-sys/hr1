@@ -1,0 +1,9 @@
+/*
+ * Tailwind source entry point.
+ * Built with `npm run build` -> assets/css/tailwind.css
+ * Preflight is disabled in tailwind.config.js so the existing HR1 UI
+ * (driven by style.css) stays pixel-identical.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -1,0 +1,37 @@
+# TRI-M GLOBAL HR1 — REST API (v1)
+# Routes every non-file request to the front controller.
+
+Options -Indexes
+
+# Apache (mod_php/CGI/FastCGI) strips the Authorization header by default.
+# Re-inject it so PHP sees HTTP_AUTHORIZATION for Bearer tokens.
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+<IfModule mod_cgi.c>
+    CGIPassAuth On
+</IfModule>
+<IfModule mod_cgid.c>
+    CGIPassAuth On
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct HTTP access to internal classes (they are loaded server-side only)
+    RewriteRule ^(bootstrap\.php|lib/|controllers/) - [F,L]
+
+    # Front controller
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Never serve docs/source artifacts from the API tree
+<FilesMatch "\.(md|sql|log|ini|yaml|yml)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+</IfModule>

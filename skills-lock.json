@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "PHP Security Patterns": {
+      "source": "thebushidocollective/han",
+      "sourceType": "github",
+      "skillPath": "plugins/languages/php/skills/php-security-patterns/SKILL.md",
+      "computedHash": "720760c1ed4d153cd91e473a8a4699851b631a7c598d465076a1f0f8ead26f13"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
+    "mysql": {
+      "source": "planetscale/database-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mysql/SKILL.md",
+      "computedHash": "a74d7d018c4a9cfe4fd6e37f8758ef03272cde3f3dc2444c4f299636f4b3d275"
+    },
+    "php-pro": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/php-pro/SKILL.md",
+      "computedHash": "1cd5289325d0924d6fca4f950711bc9b63d873338cf3b4acd00db62603aebeda"
+    },
+    "phpunit": {
+      "source": "xobotyi/cc-foundry",
+      "sourceType": "github",
+      "skillPath": "plugins/php/skills/phpunit/SKILL.md",
+      "computedHash": "658a43eb4e8d205f5f9c48baaa64dc1c3c17dda99679da507d2110e9976f5d3f"
+    }
+  }
+}
