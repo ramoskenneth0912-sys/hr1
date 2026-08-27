@@ -8,15 +8,48 @@ if (isLoggedIn() && isEmployee()) {
     exit;
 }
 
-$jobs = db()->query(
-    'SELECT j.*, d.name AS department_name
-     FROM job_postings j
-     LEFT JOIN departments d ON j.department_id = d.id
-     WHERE j.status = \'open\'
-     ORDER BY j.posted_date DESC, j.id ASC'
+$search = trim($_GET['search'] ?? '');
+$locationFilter = trim($_GET['location'] ?? '');
+$categoryFilter = $_GET['category'] ?? '';
+
+$departments = db()->query(
+    'SELECT id, name FROM departments ORDER BY name'
 )->fetchAll();
 
+$locations = db()->query(
+    "SELECT DISTINCT work_location FROM job_postings
+     WHERE status = 'open' AND work_location IS NOT NULL AND work_location <> ''
+     ORDER BY work_location"
+)->fetchAll(PDO::FETCH_COLUMN);
+
+$sql = 'SELECT j.*, d.name AS department_name
+        FROM job_postings j
+        LEFT JOIN departments d ON j.department_id = d.id
+        WHERE j.status = ?';
+$params = ['open'];
+
+if ($search !== '') {
+    $sql .= ' AND (j.title LIKE ? OR j.description LIKE ?)';
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+}
+if ($locationFilter !== '') {
+    $sql .= ' AND j.work_location = ?';
+    $params[] = $locationFilter;
+}
+if ($categoryFilter !== '') {
+    $sql .= ' AND j.department_id = ?';
+    $params[] = $categoryFilter;
+}
+
+$sql .= ' ORDER BY j.posted_date DESC, j.id ASC';
+
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
+$jobs = $stmt->fetchAll();
+
 $totalOpen = count($jobs);
+$hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '');
 
 $icons = [
     'briefcase' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
@@ -239,6 +272,61 @@ $icons = [
             text-align: center;
             color: var(--muted, #6B7280);
         }
+        .search-panel {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .search-panel input,
+        .search-panel select {
+            height: 44px;
+            padding: 0 14px;
+            border: 1px solid #ECE9F4;
+            border-radius: 8px;
+            background: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            color: #2A2153;
+            transition: border-color .25s ease, box-shadow .25s ease;
+        }
+        .search-panel input { flex: 2; min-width: 180px; }
+        .search-panel select { flex: 1; min-width: 140px; cursor: pointer; }
+        .search-panel input:focus,
+        .search-panel select:focus {
+            outline: none;
+            border-color: #A87FE8;
+            box-shadow: 0 0 0 3px rgba(67,16,159,.1);
+        }
+        .btn-search {
+            height: 44px;
+            padding: 0 32px;
+            background: var(--pub-brand);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background .2s ease;
+        }
+        .btn-search:hover { background: var(--pub-brand-dark); }
+        .clear-filters {
+            align-self: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--pub-brand);
+            text-decoration: none;
+            padding: 8px 4px;
+            white-space: nowrap;
+        }
+        .clear-filters:hover { text-decoration: underline; }
+        @media (max-width: 640px) {
+            .search-panel { flex-direction: column; }
+            .search-panel input, .search-panel select { flex: 1 1 100%; }
+            .btn-search { width: 100%; }
+        }
         @keyframes browseIn {
             from { opacity: 0; transform: translateY(12px); }
             to   { opacity: 1; transform: translateY(0); }
@@ -303,9 +391,33 @@ $icons = [
             <p><?= $totalOpen ?> open position<?= $totalOpen === 1 ? '' : 's' ?> — select a job to view full details and apply.</p>
         </div>
 
+        <form method="get" action="browse-jobs.php" class="search-panel">
+            <input type="text" name="search" placeholder="Search by job title or keyword" value="<?= e($search) ?>" aria-label="Search by job title or keyword">
+            <select name="location" aria-label="Location">
+                <option value="">All Locations</option>
+                <?php foreach ($locations as $loc): ?>
+                    <option value="<?= e($loc) ?>" <?= $locationFilter === $loc ? 'selected' : '' ?>><?= e($loc) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="category" aria-label="Job Category">
+                <option value="">All Departments</option>
+                <?php foreach ($departments as $dept): ?>
+                    <option value="<?= e((string)$dept['id']) ?>" <?= $categoryFilter == $dept['id'] ? 'selected' : '' ?>><?= e($dept['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn-search">Search</button>
+            <?php if ($hasFilters): ?>
+                <a href="browse-jobs.php" class="clear-filters">Clear &times;</a>
+            <?php endif; ?>
+        </form>
+
         <?php if (empty($jobs)): ?>
             <div class="browse-empty">
-                There are no open positions right now. Please check back soon.
+                <?php if ($hasFilters): ?>
+                    No jobs match your search criteria. <a href="browse-jobs.php" style="color:var(--pub-brand);font-weight:600;">Clear filters</a> to see all open positions.
+                <?php else: ?>
+                    There are no open positions right now. Please check back soon.
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="job-list">

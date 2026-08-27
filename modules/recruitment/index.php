@@ -25,6 +25,7 @@ $interviews = db()->query(
     </div>
     <div class="btn-group">
         <a href="job_create.php" class="btn btn-primary">+ Job Posting</a>
+        <a href="departments.php" class="btn btn-outline">Departments</a>
         <a href="interview_create.php" class="btn btn-outline">+ Schedule Interview</a>
     </div>
 </div>

@@ -117,6 +117,9 @@ function e_preset(?string $v): string { return htmlspecialchars($v ?? '', ENT_QU
 <body class="bg-gray-50 min-h-screen">
 
 <div class="main-content" style="padding: 2rem; max-width: 960px; margin: 0 auto;">
+    <a href="<?= BASE_URL ?>/modules/settings/index.php" style="display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; font-weight:600; color:var(--purple); text-decoration:none; margin-bottom:1rem; transition:color .15s;">
+        <span aria-hidden="true">&larr;</span> Back to Settings
+    </a>
     <div class="page-header">
         <h1>Password Reset Requests</h1>
         <p>Review and approve or reject employee password-reset requests.</p>
@@ -210,5 +213,25 @@ function e_preset(?string $v): string { return htmlspecialchars($v ?? '', ENT_QU
     </div>
 </div>
 
+<script>
+(function () {
+    var pending = document.getElementById('pending');
+    var history = document.getElementById('history');
+    var tabs = document.querySelectorAll('.tab-bar a');
+    function show(tab) {
+        pending.style.display = tab === 'pending' ? '' : 'none';
+        history.style.display = tab === 'history' ? '' : 'none';
+        tabs.forEach(function (a) {
+            a.classList.toggle('active', a.getAttribute('href') === '#' + tab);
+        });
+    }
+    function onHash() {
+        var h = location.hash.replace('#', '');
+        show(h === 'history' ? 'history' : 'pending');
+    }
+    window.addEventListener('hashchange', onHash);
+    onHash();
+})();
+</script>
 </body>
 </html>

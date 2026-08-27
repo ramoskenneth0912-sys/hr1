@@ -8,64 +8,49 @@ if (isLoggedIn() && isEmployee()) {
     exit;
 }
 
-$search = trim($_GET['search'] ?? '');
-$locationFilter = trim($_GET['location'] ?? '');
-$categoryFilter = $_GET['category'] ?? '';
-
-$departments = getDepartments();
-
-$locations = db()->query(
-    "SELECT DISTINCT work_location FROM job_postings
-     WHERE status = 'open' AND work_location IS NOT NULL AND work_location <> ''
-     ORDER BY work_location"
-)->fetchAll(PDO::FETCH_COLUMN);
-
 $totalOpen = (int) db()->query(
     "SELECT COUNT(*) FROM job_postings WHERE status = 'open'"
 )->fetchColumn();
 
-$sql = 'SELECT j.*, d.name AS department_name
-        FROM job_postings j
-        LEFT JOIN departments d ON j.department_id = d.id
-        WHERE j.status = ?';
-$params = ['open'];
-
-if ($search !== '') {
-    $sql .= ' AND (j.title LIKE ? OR j.description LIKE ?)';
-    $params[] = "%$search%";
-    $params[] = "%$search%";
-}
-if ($locationFilter !== '') {
-    $sql .= ' AND j.work_location = ?';
-    $params[] = $locationFilter;
-}
-if ($categoryFilter !== '') {
-    $sql .= ' AND j.department_id = ?';
-    $params[] = $categoryFilter;
-}
-
-$sql .= ' ORDER BY j.posted_date DESC';
-
-$stmt = db()->prepare($sql);
-$stmt->execute($params);
-$jobs = $stmt->fetchAll();
-
-$employmentLabels = [
-    'regular'       => 'Full-time',
-    'contractual'   => 'Contractual',
-    'probationary'  => 'Probationary',
-    'part_time'     => 'Part-time',
-    'internship'    => 'Internship',
+$professions = [
+    [
+        'img'  => '../assets/images/job-marketing.png',
+        'alt'  => 'Marketing specialist working in a creative office',
+        'title' => 'Marketing Specialist',
+        'subtitle' => 'Drive brand growth, campaigns, and customer engagement.',
+    ],
+    [
+        'img'  => '../assets/images/job-operations.png',
+        'alt'  => 'Operations coordinator working in a logistics warehouse',
+        'title' => 'Operations Coordinator',
+        'subtitle' => 'Coordinate daily operations and keep business processes running smoothly.',
+    ],
+    [
+        'img'  => '../assets/images/job-it-support.png',
+        'alt'  => 'IT support specialist working with computer and server equipment',
+        'title' => 'IT Support Specialist',
+        'subtitle' => 'Provide technical support and keep systems, devices, and users connected.',
+    ],
+    [
+        'img'  => '../assets/images/job-finance.png',
+        'alt'  => 'Finance analyst analyzing financial data in an office',
+        'title' => 'Finance Analyst',
+        'subtitle' => 'Analyze financial data and support smarter business decisions.',
+    ],
+    [
+        'img'  => '../assets/images/job-hr-assistant.png',
+        'alt'  => 'HR assistant assisting with an interview in an HR meeting room',
+        'title' => 'HR Assistant',
+        'subtitle' => 'Support employee services, recruitment, and essential HR operations.',
+    ],
 ];
-
-$hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Positions - <?= e(APP_NAME) ?></title>
+    <title>Careers - <?= e(APP_NAME) ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -138,7 +123,7 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
         /* ===== Header ===== */
         .site-header {
             background: #fff;
-            min-height: 112px;
+            min-height: 96px;
             display: flex;
             align-items: center;
             position: relative;
@@ -242,7 +227,7 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
-            padding-top: 46px;
+            padding-top: 38px;
         }
         .hero-globe {
             position: absolute;
@@ -378,7 +363,7 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
         .clear-filters:hover { color: var(--brand-dark); text-decoration: underline; }
 
         /* ===== Jobs section ===== */
-        .jobs-section { padding: 50px 0 0; scroll-margin-top: 16px; }
+        .jobs-section { padding: 40px 0 0; scroll-margin-top: 16px; }
         .jobs-head {
             display: flex;
             align-items: flex-end;
@@ -511,7 +496,7 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
         .empty-state a { color: var(--brand); font-weight: 600; }
 
         /* ===== About / Contact ===== */
-        .info-section { padding: 64px 0 0; scroll-margin-top: 16px; }
+        .info-section { padding: 48px 0; scroll-margin-top: 16px; }
         .info-panel {
             background:
                 radial-gradient(70% 140% at 100% 0%, rgba(229,213,250,.55) 0%, rgba(229,213,250,0) 60%),
@@ -616,10 +601,149 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             color: var(--muted);
         }
 
+        /* ===== How to Apply ===== */
+        .apply-section {
+            padding: 48px 0;
+            scroll-margin-top: 16px;
+        }
+        .apply-section .container {
+            background:
+                radial-gradient(70% 140% at 100% 0%, rgba(229,213,250,.55) 0%, rgba(229,213,250,0) 60%),
+                linear-gradient(180deg, #FBFAFE 0%, #F6F2FC 100%);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: clamp(24px, 3vw, 40px);
+        }
+        .apply-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .apply-kicker {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--brand);
+        }
+        .apply-header h2 {
+            margin: 10px 0 0;
+            font-size: clamp(21px, 1.8vw, 27px);
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            color: var(--ink);
+        }
+        .apply-header p {
+            margin: 14px 0 0;
+            font-size: 15px;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+
+        /* Steps row */
+        .apply-steps {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        .apply-step {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+        }
+        .step-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 14px;
+            color: var(--brand);
+            opacity: .82;
+        }
+        .step-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+        .step-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 14px;
+            background: var(--brand);
+            color: #fff;
+            font-size: 19px;
+            font-weight: 700;
+            border-radius: 50%;
+            letter-spacing: .02em;
+        }
+        .step-title {
+            margin: 0 0 8px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink);
+        }
+        .step-desc {
+            margin: 0;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--muted);
+            max-width: 260px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Connector line */
+        .apply-steps::before {
+            content: "";
+            position: absolute;
+            top: 28px;
+            left: calc(25% / 2);
+            right: calc(25% / 2);
+            height: 2px;
+            background: rgba(67,16,159,.2);
+            border-radius: 1px;
+            z-index: 0;
+        }
+
+        /* Info box */
+        .apply-info-box {
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 20px 24px;
+        }
+        .apply-info-icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+            color: var(--brand);
+        }
+        .apply-info-box strong {
+            display: block;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink);
+        }
+        .apply-info-box p {
+            margin: 4px 0 0;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+
         /* ===== Footer ===== */
         .site-footer {
             position: relative;
-            margin-top: 64px;
+            margin-top: 48px;
             background: var(--footer-bg);
             color: #fff;
             overflow: hidden;
@@ -767,6 +891,11 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             .job-banner { height: 288px; }
             .hero-globe { opacity: .5; max-width: 52vw; }
             .about-points, .contact-grid { grid-template-columns: repeat(3, 1fr); }
+            .apply-steps { grid-template-columns: repeat(2, 1fr); gap: 32px 24px; }
+            .apply-steps::before { display: none; }
+            .apply-section .container { padding: clamp(20px, 2.6vw, 32px); }
+            .info-panel { padding: clamp(20px, 2.6vw, 32px); }
+            .apply-section, .info-section { padding-top: 40px; }
         }
         @media (max-width: 900px) {
             .about-points, .contact-grid { grid-template-columns: 1fr 1fr; }
@@ -778,15 +907,16 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             .footer-copy { order: 3; width: 100%; }
         }
         @media (max-width: 820px) {
-            .site-header { min-height: 88px; }
+            .site-header { min-height: 80px; }
             .brand img { height: 64px; }
             .main-nav { display: none; }
             .nav-toggle { display: inline-flex; }
             .mobile-nav:not([hidden]) { display: block; }
-            .hero { height: auto; padding-bottom: 40px; }
-            .hero .container { padding-top: 34px; }
+            .hero { height: auto; padding-bottom: 28px; }
+            .hero .container { padding-top: 30px; }
             .hero-globe { opacity: .38; max-width: 68vw; }
             .btn-login { height: 44px; padding: 0 24px; }
+            .site-footer { margin-top: 40px; }
         }
         @media (max-width: 760px) {
             .hero h1 { font-size: 32px; }
@@ -800,11 +930,22 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             .job-banner-subtitle { font-size: 14px; }
             .jobs-head { flex-direction: column; align-items: flex-start; }
             .about-points, .contact-grid { grid-template-columns: 1fr; }
-            .info-section { padding-top: 44px; }
+            .info-section { padding-top: 36px; padding-bottom: 0; }
+            .apply-steps { grid-template-columns: 1fr; gap: 0; }
+            .apply-step { display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto; gap: 0 18px; text-align: left; padding: 20px 0; }
+            .apply-step:not(:last-child) { border-bottom: 1px solid var(--line); }
+            .apply-step .step-icon { display: none; }
+            .apply-step .step-number { grid-row: 1 / 3; align-self: start; margin: 0; width: 56px; height: 56px; font-size: 18px; }
+            .apply-step .step-title { grid-column: 2; align-self: end; font-size: 15px; margin-bottom: 4px; }
+            .apply-step .step-desc { grid-column: 2; align-self: start; margin: 0; max-width: none; }
+            .apply-steps::before { display: none; }
+            .apply-section { padding: 36px 0; }
+            .apply-info-box { flex-direction: column; gap: 10px; }
+            .apply-info-icon { margin: 0; }
         }
         @media (max-width: 480px) {
             .brand img { height: 54px; }
-            .site-header { min-height: 76px; }
+            .site-header { min-height: 68px; }
             .hero h1 { font-size: 27px; }
             .hero-sub { font-size: 15px; }
             .btn-hero { height: 52px; padding: 0 30px; }
@@ -813,6 +954,17 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             .job-banner-title { font-size: 18px; }
             .job-banner-subtitle { font-size: 13px; margin-top: 6px; }
             .footer-brand img { height: 62px; max-width: 86vw; }
+            .apply-header h2 { font-size: 20px; }
+            .apply-step { padding: 16px 0; }
+            .apply-step .step-number { width: 48px; height: 48px; font-size: 16px; border-radius: 50%; }
+            .apply-step .step-title { font-size: 14px; }
+            .apply-step .step-desc { font-size: 13px; }
+            .apply-info-box { padding: 14px 16px; }
+            .apply-info-box strong { font-size: 14px; }
+            .apply-info-box p { font-size: 13px; }
+            .apply-section { padding: 28px 0; }
+            .info-section { padding: 28px 0; }
+            .site-footer { margin-top: 32px; }
         }
         @media (max-width: 560px) {
             .site-header .btn-login { display: none; }
@@ -863,110 +1015,83 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
         </div>
     </section>
 
-    <div class="search-zone">
-        <span class="blob blob-left" aria-hidden="true"></span>
-        <span class="blob blob-right" aria-hidden="true"></span>
-        <form method="get" action="jobs.php#jobs" class="container search-panel">
-            <input type="text" name="search" placeholder="Search by job title or keyword" value="<?= e($search) ?>" aria-label="Search by job title or keyword">
-            <select name="location" aria-label="Location" data-autosubmit>
-                <option value="">Location</option>
-                <?php foreach ($locations as $loc): ?>
-                    <option value="<?= e($loc) ?>" <?= $locationFilter === $loc ? 'selected' : '' ?>><?= e($loc) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <select name="category" aria-label="Job Category" data-autosubmit>
-                <option value="">Job Category</option>
-                <?php foreach ($departments as $dept): ?>
-                    <option value="<?= e((string)$dept['id']) ?>" <?= $categoryFilter == $dept['id'] ? 'selected' : '' ?>><?= e($dept['name']) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <button type="submit" class="btn-search">Search</button>
-            <?php if ($hasFilters): ?>
-                <a href="jobs.php" class="clear-filters">Clear filters &times;</a>
-            <?php endif; ?>
-        </form>
-    </div>
-
     <main class="jobs-section" id="jobs">
         <div class="container">
             <div class="jobs-head reveal">
                 <div>
-                    <h2>Available Job Opportunities</h2>
-                    <p class="jobs-sub">Explore and apply for available positions that match your skills.</p>
+                    <h2>Career Opportunities</h2>
+                    <p class="jobs-sub">Explore the career paths and professional opportunities available with our company.</p>
                 </div>
-                <span class="jobs-count">Showing <?= count($jobs) ?> of <?= $totalOpen ?> jobs</span>
             </div>
 
-            <?php if (empty($jobs)): ?>
-                <div class="empty-state reveal in-view">
-                    <p><strong>No open positions at this time.</strong></p>
-                    <p>Check back later for new opportunities.</p>
-                    <?php if ($hasFilters): ?>
-                        <p><a href="jobs.php">Clear search filters</a></p>
-                    <?php endif; ?>
-                </div>
-            <?php else: ?>
-                <div class="job-grid">
-                    <?php
-                        $jobImageMap = [
-                            'marketing'    => [
-                                'img' => '../assets/images/job-marketing.png',
-                                'alt' => 'Marketing specialist working in a creative office',
-                                'title' => 'Marketing Specialist',
-                                'subtitle' => 'Drive brand growth, campaigns, and customer engagement.',
-                            ],
-                            'operation'    => [
-                                'img' => '../assets/images/job-operations.png',
-                                'alt' => 'Operations coordinator working in a logistics warehouse',
-                                'title' => 'Operations Coordinator',
-                                'subtitle' => 'Coordinate daily operations and keep business processes running smoothly.',
-                            ],
-                            'it support'   => [
-                                'img' => '../assets/images/job-it-support.png',
-                                'alt' => 'IT support specialist working with computer and server equipment',
-                                'title' => 'IT Support Specialist',
-                                'subtitle' => 'Provide technical support and keep systems, devices, and users connected.',
-                            ],
-                            'finance'      => [
-                                'img' => '../assets/images/job-finance.png',
-                                'alt' => 'Finance analyst analyzing financial data in an office',
-                                'title' => 'Finance Analyst',
-                                'subtitle' => 'Analyze financial data and support smarter business decisions.',
-                            ],
-                            'hr assistant' => [
-                                'img' => '../assets/images/job-hr-assistant.png',
-                                'alt' => 'HR assistant assisting with an interview in an HR meeting room',
-                                'title' => 'HR Assistant',
-                                'subtitle' => 'Support employee services, recruitment, and essential HR operations.',
-                            ],
-                        ];
-                        $fallbackImg = ['img' => '../assets/images/job-operations.png', 'alt' => 'Professional at work in a modern workplace'];
-                    ?>
-                    <?php foreach ($jobs as $i => $job): ?>
-                        <?php
-                            $titleLower = mb_strtolower((string)$job['title']);
-                            $imgMeta = $fallbackImg;
-                            foreach ($jobImageMap as $needle => $meta) {
-                                if (mb_stripos($titleLower, $needle) !== false) { $imgMeta = $meta; break; }
-                            }
-                        ?>
-                        <a class="job-banner reveal" href="job_detail.php?id=<?= (int)$job['id'] ?>" style="--rd: <?= number_format($i * 0.06, 2) ?>s" aria-label="<?= e($job['title']) ?> — view details and apply">
-                            <img class="job-banner-img" src="<?= e($imgMeta['img']) ?>" alt="<?= e($imgMeta['alt']) ?>">
-                            <div class="job-banner-shade" aria-hidden="true"></div>
-                            <?php if (!empty($imgMeta['title'])): ?>
-                                <span class="job-banner-text">
-                                    <span class="job-banner-title"><?= e($imgMeta['title']) ?></span>
-                                    <?php if (!empty($imgMeta['subtitle'])): ?>
-                                        <span class="job-banner-subtitle"><?= e($imgMeta['subtitle']) ?></span>
-                                    <?php endif; ?>
-                                </span>
+            <div class="job-grid">
+                <?php foreach ($professions as $i => $prof): ?>
+                    <a class="job-banner reveal" href="<?= BASE_URL ?>/public/browse-jobs.php" style="--rd: <?= number_format($i * 0.06, 2) ?>s" aria-label="<?= e($prof['title']) ?> — browse open positions">
+                        <img class="job-banner-img" src="<?= e($prof['img']) ?>" alt="<?= e($prof['alt']) ?>">
+                        <div class="job-banner-shade" aria-hidden="true"></div>
+                        <span class="job-banner-text">
+                            <span class="job-banner-title"><?= e($prof['title']) ?></span>
+                            <?php if (!empty($prof['subtitle'])): ?>
+                                <span class="job-banner-subtitle"><?= e($prof['subtitle']) ?></span>
                             <?php endif; ?>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
     </main>
+
+    <section class="apply-section" id="how-to-apply">
+        <div class="container">
+            <div class="apply-header">
+                <p class="apply-kicker">How to Apply</p>
+                <h2>A simple and easy process to join our growing team.</h2>
+            </div>
+
+            <div class="apply-steps">
+                <div class="apply-step">
+                    <div class="step-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </div>
+                    <div class="step-number">01</div>
+                    <h3 class="step-title">Find a Job</h3>
+                    <p class="step-desc">Browse available positions and choose a role that matches your skills.</p>
+                </div>
+                <div class="apply-step">
+                    <div class="step-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </div>
+                    <div class="step-number">02</div>
+                    <h3 class="step-title">Submit Application</h3>
+                    <p class="step-desc">Complete the application form and upload your resume/CV.</p>
+                </div>
+                <div class="apply-step">
+                    <div class="step-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
+                    </div>
+                    <div class="step-number">03</div>
+                    <h3 class="step-title">Screening</h3>
+                    <p class="step-desc">Our HR team reviews your application and qualifications.</p>
+                </div>
+                <div class="apply-step">
+                    <div class="step-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="step-number">04</div>
+                    <h3 class="step-title">Interview</h3>
+                    <p class="step-desc">Qualified candidates are contacted for the next stage of the recruitment process.</p>
+                </div>
+            </div>
+
+            <aside class="apply-info-box" role="note">
+                <svg class="apply-info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <div>
+                    <strong>What happens next?</strong>
+                    <p>If you successfully complete the recruitment process, you may proceed to the required training and onboarding stages.</p>
+                </div>
+            </aside>
+        </div>
+    </section>
 
     <section class="info-section" id="about">
         <div class="container">
@@ -1082,24 +1207,7 @@ $hasFilters = ($search !== '' || $locationFilter !== '' || $categoryFilter !== '
             });
         }
 
-        document.querySelectorAll('select[data-autosubmit]').forEach(function (sel) {
-            sel.addEventListener('change', function () { sel.form.submit(); });
-        });
-
-        var reveals = document.querySelectorAll('.reveal');
-        if (reduced || !('IntersectionObserver' in window)) {
-            reveals.forEach(function (el) { el.classList.add('in-view'); });
-        } else {
-            var io = new IntersectionObserver(function (entries) {
-                entries.forEach(function (entry) {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('in-view');
-                        io.unobserve(entry.target);
-                    }
-                });
-            }, { threshold: 0.12, rootMargin: '0px 0px -30px 0px' });
-            reveals.forEach(function (el) { io.observe(el); });
-        }
+        document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in-view'); });
     })();
     </script>
 </body>

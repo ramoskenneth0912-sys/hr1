@@ -2,7 +2,7 @@
 /**
  * HR/ADMIN SETTINGS — administrative configuration area.
  * Sections: Account, Security, Notifications, Users & Roles,
- * HR Preferences, Recruitment, Attendance & Leave, System (admin-only).
+ * HR Preferences, Recruitment, System (admin-only).
  *
  * Employee self-service settings intentionally live ONLY in
  * modules/employee/settings.php — employees are redirected there.
@@ -53,7 +53,6 @@ $NOTIF_GROUPS = [
     ],
     'HR Notifications' => [
         'leave_request_submitted' => 'Leave request submitted',
-        'attendance_issues' => 'Attendance issues',
         'employee_updates' => 'Employee updates',
         'onboarding_updates' => 'Onboarding updates',
     ],
@@ -144,13 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/settings/index.php#recruitment');
     }
 
-    if ($action === 'save_attendance') {
-        save_settings(['att_work_hours', 'att_late_threshold', 'att_overtime_enabled',
-            'leave_approval_flow', 'leave_duration_unit']);
-        flash('success', 'Attendance & leave settings saved.');
-        redirect(BASE_URL . '/modules/settings/index.php#attendance-leave');
-    }
-
     if ($action === 'save_system') {
         if (!$isAdmin) {
             flash('danger', 'Only Admin users may change system configuration.');
@@ -183,7 +175,7 @@ require_once __DIR__ . '/../../includes/header.php';
 $navItems = [
     'account' => 'Account', 'security' => 'Security', 'notifications' => 'Notifications',
     'users-roles' => 'Users & Roles', 'hr-preferences' => 'HR Preferences',
-    'recruitment' => 'Recruitment', 'attendance-leave' => 'Attendance & Leave',
+    'recruitment' => 'Recruitment',
 ];
 if ($isAdmin) { $navItems['system'] = 'System'; }
 ?>
@@ -380,42 +372,6 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
         </div>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save Recruitment Settings</button>
-        </div>
-    </form>
-</section>
-
-<!-- 7. ATTENDANCE & LEAVE -->
-<section id="attendance-leave" class="panel fade-in-up" style="animation-delay:.35s">
-    <h2>Attendance &amp; Leave Settings</h2>
-    <p class="panel-desc">Policy configuration only — employees submit their own requests through the Employee portal.</p>
-    <form method="post" class="form-panel compact-form">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="save_attendance">
-        <div class="form-grid">
-            <div class="form-group"><label>Working Hours per Day</label><input type="number" min="1" max="16" step="0.5" name="att_work_hours" value="<?= e(get_setting('att_work_hours', '8')) ?>"></div>
-            <div class="form-group"><label>Late Threshold (minutes)</label><input type="number" min="0" max="120" name="att_late_threshold" value="<?= e(get_setting('att_late_threshold', '15')) ?>"></div>
-            <div class="form-group"><label>Overtime Tracking</label>
-                <select name="att_overtime_enabled">
-                    <option value="0" <?= get_setting('att_overtime_enabled') === '0' ? 'selected' : '' ?>>Disabled</option>
-                    <option value="1" <?= get_setting('att_overtime_enabled') === '1' ? 'selected' : '' ?>>Enabled</option>
-                </select>
-            </div>
-            <div class="form-group"><label>Leave Approval Workflow</label>
-                <select name="leave_approval_flow">
-                    <option value="hr" <?= get_setting('leave_approval_flow') === 'hr' ? 'selected' : '' ?>>HR approval</option>
-                    <option value="manager" <?= get_setting('leave_approval_flow') === 'manager' ? 'selected' : '' ?>>Manager approval</option>
-                    <option value="either" <?= get_setting('leave_approval_flow') === 'either' ? 'selected' : '' ?>>Manager or HR</option>
-                </select>
-            </div>
-            <div class="form-group"><label>Leave Duration Unit</label>
-                <select name="leave_duration_unit">
-                    <option value="days" <?= get_setting('leave_duration_unit') === 'days' ? 'selected' : '' ?>>Days</option>
-                    <option value="hours" <?= get_setting('leave_duration_unit') === 'hours' ? 'selected' : '' ?>>Hours</option>
-                </select>
-            </div>
-        </div>
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save Attendance &amp; Leave Settings</button>
         </div>
     </form>
 </section>
