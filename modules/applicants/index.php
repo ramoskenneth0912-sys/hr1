@@ -35,7 +35,10 @@ if (!empty($ids)) {
         <h1 class="page-title">Applicant Management</h1>
         <p class="page-subtitle">Module 1 — Track job applicants through the hiring pipeline</p>
     </div>
-    <a href="create.php" class="btn btn-primary">+ New Applicant</a>
+    <div class="btn-group">
+        <a href="create.php" class="btn btn-primary">+ New Applicant</a>
+        <a href="interview_history.php" class="btn btn-outline">Interview History</a>
+    </div>
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
@@ -91,6 +94,9 @@ if (!empty($ids)) {
                             <input type="hidden" name="applicant_id" value="<?= (int) $row['id'] ?>">
                             <button type="submit" class="btn btn-sm btn-primary">Run Screening</button>
                         </form>
+                        <?php endif; ?>
+                        <?php if (in_array($row['status'], ['accepted', 'passed_screening'], true)): ?>
+                        <a href="schedule_interview.php?id=<?= (int) $row['id'] ?>" class="btn btn-sm btn-primary">Schedule Interview</a>
                         <?php endif; ?>
                         <a href="view.php?id=<?= (int) $row['id'] ?>" class="btn btn-sm btn-outline">View</a>
                         <a href="edit.php?id=<?= (int) $row['id'] ?>" class="btn btn-sm btn-outline">Edit</a>

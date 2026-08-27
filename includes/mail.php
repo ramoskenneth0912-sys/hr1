@@ -114,6 +114,97 @@ function sendResetApprovedToEmployee(string $toEmail, string $rawToken, string $
 }
 
 /**
+ * Send the application-acceptance email to an applicant after HR moves their
+ * application to "accepted" / "passed_screening".
+ *
+ * Reuses the existing hr1Sendmail() SMTP relay — no separate mail system.
+ *
+ * @param string $toEmail     Applicant's email (from the applicants table)
+ * @param string $applicantName  Applicant display name for the greeting
+ * @param string $position    The applied job position (used in subject & body)
+ * @return bool  true if sendmail accepted the message
+ */
+function sendApplicationAcceptedEmail(string $toEmail, string $applicantName, string $position): bool
+{
+    if ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false) {
+        error_log('HR1 ACCEPTANCE EMAIL: skipped — invalid email address');
+        return false;
+    }
+
+    $subject = 'Application Update – ' . $position;
+
+    $body = "Dear " . ($applicantName !== '' ? $applicantName : 'Applicant') . ",\n\n"
+        . "Thank you for applying for the " . $position . " position at TRI-M Global Logistics & Trading Inc.\n\n"
+        . "We are pleased to inform you that your application has passed the current stage of our recruitment process.\n\n"
+        . "Our HR team will contact you regarding the next step.\n\n"
+        . "Best regards,\n\n"
+        . "Human Resources Department\n"
+        . "TRI-M Global Logistics & Trading Inc.\n";
+
+    $sent = hr1Sendmail($toEmail, $subject, $body);
+
+    if (!$sent) {
+        error_log('HR1 ACCEPTANCE EMAIL FAILED: to=' . $toEmail);
+    }
+
+    return $sent;
+}
+
+/**
+ * Send the interview-invitation email to an applicant after an interview is
+ * successfully scheduled. Reuses the existing hr1Sendmail() SMTP relay.
+ *
+ * @param string $toEmail       Applicant's registered email (from the database)
+ * @param string $applicantName Applicant display name
+ * @param string $position      The applied job position (used in subject & body)
+ * @param array  $details       Associative array with keys: date, time, location,
+ *                              company_address, interviewer, additional_instructions
+ * @return bool  true if sendmail accepted the message
+ */
+function sendInterviewInvitationEmail(string $toEmail, string $applicantName, string $position, array $details): bool
+{
+    if ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false) {
+        error_log('HR1 INTERVIEW EMAIL: skipped — invalid email address');
+        return false;
+    }
+
+    $subject = 'Interview Invitation – ' . $position;
+
+    $date = (string) ($details['date'] ?? '');
+    $time = (string) ($details['time'] ?? '');
+    $location = (string) ($details['location'] ?? '');
+    $address = (string) ($details['company_address'] ?? '');
+    $interviewer = (string) ($details['interviewer'] ?? '');
+    $instructions = (string) ($details['additional_instructions'] ?? '');
+
+    $body = "Dear " . ($applicantName !== '' ? $applicantName : 'Applicant') . ",\n\n"
+        . "Thank you for your application for the " . $position . " position at TRI-M Global Logistics & Trading Inc.\n\n"
+        . "We are pleased to inform you that you have been selected to proceed to the interview stage of our recruitment process.\n\n"
+        . "Interview Details:\n\n"
+        . "Date: " . $date . "\n"
+        . "Time: " . $time . "\n"
+        . "Location: " . $location . "\n"
+        . "Company Address: " . $address . "\n"
+        . "Interviewer: " . $interviewer . "\n\n"
+        . "Additional Instructions:\n"
+        . ($instructions !== '' ? $instructions : '—') . "\n\n"
+        . "Please arrive 10\u201315 minutes before your scheduled interview and bring your resume/CV and a valid ID.\n\n"
+        . "If you have any questions or need to request a schedule change, please contact our HR department.\n\n"
+        . "We look forward to meeting you.\n\n"
+        . "Best regards,\n\n"
+        . "Human Resources Department\n"
+        . "TRI-M Global Logistics & Trading Inc.\n";
+
+    $sent = hr1Sendmail($toEmail, $subject, $body);
+
+    if (!$sent) {
+        error_log('HR1 INTERVIEW EMAIL FAILED: to=' . $toEmail);
+    }
+
+    return $sent;
+}
+
+/**
  * Notify an HR user by email that a password reset request is pending.
  * In-app notification is handled by notifyHRofResetRequest() in password_reset.php.
  * This function is a supplementary email channel (optional).

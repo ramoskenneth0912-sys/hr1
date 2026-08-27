@@ -10,6 +10,15 @@ if (!$id) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
+
+    // Server-side whitelist — never trust the frontend to pick an arbitrary status.
+    $newStatus = trim($_POST['status'] ?? '');
+    $allowedStatuses = ['new', 'screening', 'shortlisted', 'accepted', 'passed_screening', 'interview', 'offered', 'hired', 'rejected'];
+    if (!in_array($newStatus, $allowedStatuses, true)) {
+        flash('danger', 'Invalid status value.');
+        redirect(BASE_URL . '/modules/applicants/index.php');
+    }
+
     $oldStmt = db()->prepare('SELECT status FROM applicants WHERE id = ?');
     $oldStmt->execute([$id]);
     $oldStatus = ($prev = $oldStmt->fetch()) ? $prev['status'] : null;
@@ -27,17 +36,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         trim($_POST['position_applied']),
         $_POST['department_id'] ?: null,
         $_POST['job_posting_id'] ?: null,
-        $_POST['status'],
+        $newStatus,
         $_POST['applied_date'],
         trim($_POST['notes'] ?? ''),
         $id,
     ]);
 
+    $freshStmt = db()->prepare('SELECT * FROM applicants WHERE id = ?');
+    $freshStmt->execute([$id]);
+    $fresh = $freshStmt->fetch();
+
     // Notify the applicant's account when HR moves their application forward.
-    if ($oldStatus !== $_POST['status']) {
-        $freshStmt = db()->prepare('SELECT * FROM applicants WHERE id = ?');
-        $freshStmt->execute([$id]);
-        $fresh = $freshStmt->fetch();
+    if ($oldStatus !== $newStatus) {
         $labels = applicationStatuses();
         notifyUser(
             applicantUserId($fresh),
@@ -46,6 +56,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ($labels[$fresh['status']] ?? ucfirst($fresh['status'])) . '".',
             BASE_URL . '/modules/applicant/dashboard.php'
         );
+    }
+
+    // Send the acceptance email when HR moves the applicant to an accepted stage,
+    // using the email already stored in the database. Guarded so it is sent at
+    // most once per applicant (prevents duplicate acceptance emails).
+    if (in_array($newStatus, ['accepted', 'passed_screening'], true)
+        && empty($fresh['acceptance_email_sent_at'])) {
+        require_once __DIR__ . '/../../includes/mail.php';
+        require_once __DIR__ . '/../../includes/security_log.php';
+
+        $applicantName = trim($fresh['first_name'] . ' ' . $fresh['last_name']);
+        $sent = sendApplicationAcceptedEmail(
+            $fresh['email'],
+            $applicantName,
+            $fresh['position_applied']
+        );
+
+        if ($sent) {
+            db()->prepare('UPDATE applicants SET acceptance_email_sent_at = NOW() WHERE id = ?')
+                ->execute([$id]);
+            securityLog(
+                'app_acceptance_email_sent',
+                'applicant_id=' . $id . ' status=' . $fresh['status'],
+                $_SESSION['user_id']
+            );
+        } else {
+            // Email failed — application status remains Accepted/Passed Screening.
+            securityLog(
+                'app_acceptance_email_failed',
+                'applicant_id=' . $id . ' status=' . $fresh['status'],
+                $_SESSION['user_id']
+            );
+        }
     }
 
     flash('success', 'Applicant updated successfully.');
@@ -129,8 +172,8 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-group">
             <label for="status">Status</label>
             <select id="status" name="status">
-                <?php foreach (['new','screening','interview','offered','hired','rejected'] as $s): ?>
-                <option value="<?= $s ?>" <?= $applicant['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                <?php foreach (['new','screening','shortlisted','accepted','passed_screening','interview','offered','hired','rejected'] as $s): ?>
+                <option value="<?= $s ?>" <?= $applicant['status'] === $s ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $s)) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
