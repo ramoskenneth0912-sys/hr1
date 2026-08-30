@@ -19,7 +19,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-requireHRor();
+requireHRorManager();
 
 $backupDir = __DIR__ . '/../storage/backups';
 if (!is_dir($backupDir)) {

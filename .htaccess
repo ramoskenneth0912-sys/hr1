@@ -2,3 +2,22 @@ SetEnv HR1_MAIL_FROM adminhr00001@gmail.com
 
 # Custom 404 error page
 ErrorDocument 404 /HR1/404.php
+
+# ============================================================
+# Security hardening: block web access to sensitive files
+# ============================================================
+# Block any ".dot" path (e.g. .git, .env, .env.example, .gitignore,
+# .htaccess, hidden directories) from being served through Apache.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} (^|/)\. [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# Deny direct access to sensitive configuration / log / archive files
+# even if they are served from a sub-directory or renamed path.
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(env|example|ini|log|sql|bak|sh|py|pl|rb|lock|git)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>

@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/../../includes/auth.php';
+requireHRorManager();
 $pageTitle = 'Recruitment Management';
 $currentModule = 'recruitment';
 require_once __DIR__ . '/../../includes/header.php';
-requireNotApplicant();
 
 $jobs = db()->query(
     'SELECT j.*, d.name AS department_name FROM job_postings j

@@ -161,11 +161,15 @@ if (isLoggedIn()) {
                         <ul class="notif-list">
                             <?php foreach ($notifItems as $n): ?>
                             <li class="<?= $n['is_read'] ? '' : 'unread' ?>">
-                                <a href="<?= BASE_URL ?>/modules/employee/notification_read.php?id=<?= (int) $n['id'] ?>">
-                                    <span class="notif-title"><?= e($n['title']) ?></span>
-                                    <span class="notif-msg"><?= e($n['message']) ?></span>
-                                    <span class="notif-time"><?= date('M j, Y g:i A', strtotime($n['created_at'])) ?></span>
-                                </a>
+                                <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_read.php" class="notif-item-form">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
+                                    <button type="submit" class="notif-item-btn">
+                                        <span class="notif-title"><?= e($n['title']) ?></span>
+                                        <span class="notif-msg"><?= e($n['message']) ?></span>
+                                        <span class="notif-time"><?= date('M j, Y g:i A', strtotime($n['created_at'])) ?></span>
+                                    </button>
+                                </form>
                             </li>
                             <?php endforeach; ?>
                         </ul>
@@ -183,7 +187,10 @@ if (isLoggedIn()) {
                         <strong><?= e(($currentUser['first_name'] ?? '') . ' ' . ($currentUser['last_name'] ?? $currentUser['username'])) ?></strong>
                         <span><?= e(ucfirst(getUserRole())) ?></span>
                     </div>
-                    <a href="<?= BASE_URL ?>/auth/logout.php" class="btn btn-sm btn-outline" style="margin-left:.5rem;">Logout</a>
+                    <form method="post" action="<?= BASE_URL ?>/auth/logout.php" style="display:inline;margin-left:.5rem;">
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-sm btn-outline" data-confirm-logout>Logout</button>
+                    </form>
                 </div>
                 <?php else: ?>
                 <a href="<?= BASE_URL ?>/auth/login.php" class="btn btn-primary btn-sm">Log In</a>

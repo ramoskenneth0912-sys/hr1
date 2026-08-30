@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/security_headers.php';
+require_once __DIR__ . '/../includes/rate_limit.php';
+
+const RESUME_MAX_BYTES = 5 * 1024 * 1024; // 5 MB, matches the hint shown in the form
+const APPLY_MAX_SUBMISSIONS = 20;         // successful submissions per IP per window
+const APPLY_WINDOW_SECONDS = 900;         // 15 minutes
 
 if (isLoggedIn() && isEmployee()) {
     header('Location: ' . BASE_URL . '/index.php');
@@ -32,6 +37,14 @@ $oldCoverLetter = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
+
+    // Throttle bulk application spam: allow up to 20 successful submissions
+    // per IP per 15 minutes (same bound as the API "apply" endpoint).
+    $applyKey = 'webapply_' . ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    if (!webRateLimit($applyKey, APPLY_MAX_SUBMISSIONS, APPLY_WINDOW_SECONDS)) {
+        $errors[] = 'Too many applications from this location. Please try again in 15 minutes.';
+    }
+
     $oldName = trim($_POST['full_name'] ?? '');
     $oldEmail = trim($_POST['email'] ?? '');
     $oldPhone = trim($_POST['phone'] ?? '');
@@ -51,20 +64,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($_FILES['resume']) || $_FILES['resume']['error'] !== UPLOAD_ERR_OK) {
         $errors[] = 'Please upload your CV/Resume.';
     } else {
-        $allowed = ['pdf', 'doc', 'docx'];
-        $ext = strtolower(pathinfo($_FILES['resume']['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, $allowed, true)) {
-            $errors[] = 'Resume must be a PDF, DOC, or DOCX file.';
+        if ((int) ($_FILES['resume']['size'] ?? 0) <= 0) {
+            $errors[] = 'The uploaded resume is empty.';
+        } elseif ((int) $_FILES['resume']['size'] > RESUME_MAX_BYTES) {
+            $errors[] = 'Resume is too large. Maximum size is 5 MB.';
         } else {
-            $allowedMimes = [
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            ];
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mimeType = $finfo->file($_FILES['resume']['tmp_name']);
-            if (!in_array($mimeType, $allowedMimes, true)) {
-                $errors[] = 'Uploaded file type is not allowed.';
+            $allowed = ['pdf', 'doc', 'docx'];
+            $ext = strtolower(pathinfo($_FILES['resume']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                $errors[] = 'Resume must be a PDF, DOC, or DOCX file.';
+            } else {
+                $allowedMimes = [
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                ];
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $mimeType = $finfo->file($_FILES['resume']['tmp_name']);
+                if (!in_array($mimeType, $allowedMimes, true)) {
+                    $errors[] = 'Uploaded file type is not allowed.';
+                }
             }
         }
     }
@@ -77,40 +96,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mkdir($uploadDir, 0755, true);
         }
 
-        $safeFilename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $_FILES['resume']['name']);
-        $storedName = $applicantNo . '_' . $safeFilename;
-        $storedPath = 'uploads/' . $storedName;
-
-        if (move_uploaded_file($_FILES['resume']['tmp_name'], $uploadDir . '/' . $storedName)) {
-            $insert = db()->prepare(
-                'INSERT INTO applicants (user_id, applicant_no, first_name, last_name, email, phone, address, position_applied, department_id, job_posting_id, resume_path, status, applied_date, notes)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)'
-            );
-
-            $fullName = $oldName;
-            $nameParts = explode(' ', $fullName, 2);
-            $firstName = $nameParts[0];
-            $lastName = $nameParts[1] ?? '';
-
-            $insert->execute([
-                $loggedInUserId,
-                $applicantNo,
-                $firstName,
-                $lastName,
-                $oldEmail,
-                $oldPhone,
-                $oldAddress,
-                $job['title'],
-                $job['department_id'],
-                $job['id'],
-                $storedPath,
-                'new',
-                $oldCoverLetter,
-            ]);
-
-            redirect(BASE_URL . '/public/thank_you.php');
+        // Randomized stored name (allowlisted extension) — avoids predictable,
+        // user-controlled filenames and any path/traversal ambiguity.
+        if (!isset($ext) || !in_array($ext, ['pdf', 'doc', 'docx'], true)) {
+            $errors[] = 'Uploaded file type is not allowed.';
         } else {
-            $errors[] = 'Failed to upload file. Please try again.';
+            $storedName = $applicantNo . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            $storedPath = 'uploads/' . $storedName;
+
+            if (move_uploaded_file($_FILES['resume']['tmp_name'], $uploadDir . '/' . $storedName)) {
+                $insert = db()->prepare(
+                    'INSERT INTO applicants (user_id, applicant_no, first_name, last_name, email, phone, address, position_applied, department_id, job_posting_id, resume_path, status, applied_date, notes)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)'
+                );
+
+                $fullName = $oldName;
+                $nameParts = explode(' ', $fullName, 2);
+                $firstName = $nameParts[0];
+                $lastName = $nameParts[1] ?? '';
+
+                $insert->execute([
+                    $loggedInUserId,
+                    $applicantNo,
+                    $firstName,
+                    $lastName,
+                    $oldEmail,
+                    $oldPhone,
+                    $oldAddress,
+                    $job['title'],
+                    $job['department_id'],
+                    $job['id'],
+                    $storedPath,
+                    'new',
+                    $oldCoverLetter,
+                ]);
+
+                webRateLimitRecord($applyKey);
+
+                redirect(BASE_URL . '/public/thank_you.php');
+            } else {
+                $errors[] = 'Failed to upload file. Please try again.';
+            }
         }
     }
 }

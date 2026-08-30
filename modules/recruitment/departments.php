@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/../../includes/auth.php';
+requireHRorManager();
 $pageTitle = 'Department Management';
 $currentModule = 'recruitment';
 require_once __DIR__ . '/../../includes/header.php';
-requireNotApplicant();
 
 $departments = db()->query(
     'SELECT d.*, COUNT(j.id) AS job_count

@@ -1,3 +1,14 @@
 # Resume files uploaded through the API are private.
 # Direct web access is denied; retrieval must go through an authorized endpoint.
 Require all denied
+
+# Defense-in-depth: never treat uploaded content as executable.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .php3 .php4 .php5 .phtml .phar .cgi .pl .py
+RemoveType .php .php3 .php4 .php5 .phtml .phar
+Options -Indexes -ExecCGI

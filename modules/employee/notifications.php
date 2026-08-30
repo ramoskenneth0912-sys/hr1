@@ -69,7 +69,11 @@ require_once __DIR__ . '/../../includes/header.php';
                 <td><span class="badge <?= $n['is_read'] ? 'badge-secondary' : 'badge-warning' ?>"><?= $n['is_read'] ? 'Read' : 'Unread' ?></span></td>
                 <td>
                     <?php if (!$n['is_read']): ?>
-                    <a href="<?= BASE_URL ?>/modules/employee/notification_read.php?id=<?= (int) $n['id'] ?>" class="btn btn-sm btn-outline">Mark read</a>
+                    <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_read.php" style="display:inline">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
+                        <button type="submit" class="btn btn-sm btn-outline">Mark read</button>
+                    </form>
                     <?php endif; ?>
                 </td>
             </tr>

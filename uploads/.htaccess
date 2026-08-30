@@ -5,4 +5,16 @@
     Require all denied
 </FilesMatch>
 
-Options -Indexes
+# Defense-in-depth: uploaded content must never be executable, even if an
+# attacker manages to place a script file in this directory. Disable the PHP
+# engine, unbind script handlers, and disable CGI execution for everything
+# beneath this directory.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .php3 .php4 .php5 .phtml .phar .cgi .pl .py
+RemoveType .php .php3 .php4 .php5 .phtml .phar
+Options -Indexes -ExecCGI

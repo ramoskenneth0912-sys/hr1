@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/../../includes/auth.php';
+requireHRorManager();
 $pageTitle = 'Applicant Management';
 $currentModule = 'applicants';
 require_once __DIR__ . '/../../includes/header.php';
-requireNotApplicant();
 
 require_once __DIR__ . '/../../includes/ai_screening.php';
 

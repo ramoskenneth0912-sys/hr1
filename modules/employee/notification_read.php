@@ -2,11 +2,15 @@
 /**
  * Marks ONE notification as read — only if it belongs to the logged-in
  * account — then forwards to the notification's link.
+ *
+ * State-changing: must be submitted via POST with a valid CSRF token.
  */
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/csrf.php';
 requireLogin();
+csrf_require();
 
-$id = (int) ($_GET['id'] ?? 0);
+$id = (int) ($_POST['id'] ?? 0);
 $fallback = isHRorManager() ? BASE_URL . '/index.php' : BASE_URL . '/index.php';
 
 $stmt = db()->prepare('SELECT * FROM notifications WHERE id = ? AND user_id = ? LIMIT 1');

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
-requireNotApplicant();
+requireHRorManager();
 
 require_once __DIR__ . '/../../includes/ai_screening.php';
 

@@ -30,7 +30,10 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
     <div class="page-actions">
         <a href="<?= BASE_URL ?>/public/jobs.php" class="btn btn-primary">Browse Open Jobs</a>
-        <a href="<?= BASE_URL ?>/auth/logout.php" class="btn btn-outline">Logout</a>
+        <form method="post" action="<?= BASE_URL ?>/auth/logout.php" style="display:inline">
+            <?= csrf_field() ?>
+            <button type="submit" class="btn btn-outline" data-confirm-logout>Logout</button>
+        </form>
     </div>
 </div>
 

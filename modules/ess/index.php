@@ -94,15 +94,44 @@ $pageTitle = 'Employee Self Service';
 $currentModule = 'ess';
 require_once __DIR__ . '/../../includes/header.php';
 
-$employees = getEmployees();
-$selectedEmployeeId = (int) ($_GET['employee_id'] ?? ($employees[0]['id'] ?? 0));
+$currentUserRecord = getCurrentUser();
+$isHRorManager = isHRorManager();
+$ownEmployeeId = $isHRorManager ? 0 : (int) ($currentUserRecord['employee_id'] ?? 0);
 
-$leaveRequests = db()->query(
-    'SELECT lr.*, e.employee_no, e.first_name, e.last_name
-     FROM leave_requests lr
-     JOIN employees e ON lr.employee_id = e.id
-     ORDER BY lr.created_at DESC'
-)->fetchAll();
+if ($isHRorManager) {
+    $employees = getEmployees();
+    $selectedEmployeeId = (int) ($_GET['employee_id'] ?? ($employees[0]['id'] ?? 0));
+    $leaveRequests = db()->query(
+        'SELECT lr.*, e.employee_no, e.first_name, e.last_name
+         FROM leave_requests lr
+         JOIN employees e ON lr.employee_id = e.id
+         ORDER BY lr.created_at DESC'
+    )->fetchAll();
+} else {
+    $employees = [];
+    if ($ownEmployeeId > 0) {
+        $ownStmt = db()->prepare(
+            'SELECT e.*, d.name AS department_name FROM employees e
+             LEFT JOIN departments d ON e.department_id = d.id
+             WHERE e.id = ?'
+        );
+        $ownStmt->execute([$ownEmployeeId]);
+        $ownEmp = $ownStmt->fetch();
+        if ($ownEmp) {
+            $employees = [$ownEmp];
+        }
+    }
+    $selectedEmployeeId = $ownEmployeeId;
+    $leaveStmt = db()->prepare(
+        'SELECT lr.*, e.employee_no, e.first_name, e.last_name
+         FROM leave_requests lr
+         JOIN employees e ON lr.employee_id = e.id
+         WHERE lr.employee_id = ?
+         ORDER BY lr.created_at DESC'
+    );
+    $leaveStmt->execute([$ownEmployeeId]);
+    $leaveRequests = $leaveStmt->fetchAll();
+}
 
 $profile = null;
 if ($selectedEmployeeId) {
