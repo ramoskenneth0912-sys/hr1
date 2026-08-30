@@ -54,11 +54,13 @@ CREATE TABLE IF NOT EXISTS notifications (
     message VARCHAR(500) NOT NULL,
     link VARCHAR(255) NULL,
     is_read TINYINT(1) DEFAULT 0,
+    dismissed_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_active ON notifications (user_id, is_read, dismissed_at);
 
 -- ---- API bearer-token store (migration 001 item) ---------------------------
 CREATE TABLE IF NOT EXISTS api_tokens (

@@ -107,5 +107,48 @@
     });
 })();
 </script>
+
+<!-- Remove All notifications confirmation dialog (keeps action as POST + CSRF via requestSubmit) -->
+<div id="removeAllConfirm" class="logout-modal" hidden role="dialog" aria-modal="true" aria-labelledby="removeAllConfirmTitle" aria-describedby="removeAllConfirmText">
+    <div class="logout-modal-backdrop" data-removeall-close></div>
+    <div class="logout-modal-box">
+        <h3 id="removeAllConfirmTitle">Remove all notifications?</h3>
+        <p id="removeAllConfirmText">Are you sure you want to remove all notifications?</p>
+        <div class="logout-modal-actions">
+            <button type="button" class="btn btn-outline" data-removeall-close>Cancel</button>
+            <button type="button" class="btn btn-danger-solid" data-removeall-confirm>Remove All</button>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var modal = document.getElementById('removeAllConfirm');
+    if (!modal) return;
+
+    var pendingForm = null;
+
+    function open() { modal.hidden = false; document.addEventListener('keydown', onKey, true); }
+    function close() { modal.hidden = true; pendingForm = null; document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-confirm-removeall]');
+        if (!btn) return;
+        pendingForm = btn.form;
+        if (!pendingForm || pendingForm.method.toUpperCase() !== 'POST') return;
+        e.preventDefault();
+        open();
+    });
+
+    modal.addEventListener('click', function (e) {
+        if (e.target.closest('[data-removeall-close]')) { close(); return; }
+        if (e.target.closest('[data-removeall-confirm]')) {
+            var targetForm = pendingForm;
+            close();
+            if (targetForm) targetForm.requestSubmit();
+        }
+    });
+})();
+</script>
 </body>
 </html>

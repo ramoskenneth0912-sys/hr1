@@ -72,10 +72,10 @@ $notifCount = 0;
 $notifItems = [];
 if (isLoggedIn()) {
     $notifCount = (int) db()->query(
-        'SELECT COUNT(*) FROM notifications WHERE user_id = ' . (int) $_SESSION['user_id'] . ' AND is_read = 0'
+        'SELECT COUNT(*) FROM notifications WHERE user_id = ' . (int) $_SESSION['user_id'] . ' AND is_read = 0 AND dismissed_at IS NULL'
     )->fetchColumn();
     $notifStmt = db()->prepare(
-        'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 8'
+        'SELECT * FROM notifications WHERE user_id = ? AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT 8'
     );
     $notifStmt->execute([$_SESSION['user_id']]);
     $notifItems = $notifStmt->fetchAll();
@@ -160,7 +160,7 @@ if (isLoggedIn()) {
                         <?php else: ?>
                         <ul class="notif-list">
                             <?php foreach ($notifItems as $n): ?>
-                            <li class="<?= $n['is_read'] ? '' : 'unread' ?>">
+                            <li class="notif-item-row <?= $n['is_read'] ? '' : 'unread' ?>">
                                 <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_read.php" class="notif-item-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
@@ -170,12 +170,23 @@ if (isLoggedIn()) {
                                         <span class="notif-time"><?= date('M j, Y g:i A', strtotime($n['created_at'])) ?></span>
                                     </button>
                                 </form>
+                                <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_delete.php" class="notif-item-del">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
+                                    <button type="submit" class="notif-del-btn" title="Remove from bell" aria-label="Remove from bell">&times;</button>
+                                </form>
                             </li>
                             <?php endforeach; ?>
                         </ul>
                         <?php endif; ?>
-                        <?php if (isEmployee()): ?>
+                        <?php if (isEmployee() || isHRorManager()): ?>
                         <a class="notif-view-all" href="<?= BASE_URL ?>/modules/employee/notifications.php">View all notifications</a>
+                        <?php endif; ?>
+                        <?php if (!empty($notifItems)): ?>
+                        <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_remove_all.php" class="notif-remove-all-form">
+                            <?= csrf_field() ?>
+                            <button type="submit" class="notif-remove-all" data-confirm-removeall>Remove All</button>
+                        </form>
                         <?php endif; ?>
                     </div>
                 </div>

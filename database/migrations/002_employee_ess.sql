@@ -20,8 +20,10 @@ CREATE TABLE IF NOT EXISTS notifications (
     message VARCHAR(500) NOT NULL,
     link VARCHAR(255) NULL,
     is_read TINYINT(1) DEFAULT 0,
+    dismissed_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications (user_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_active ON notifications (user_id, is_read, dismissed_at);
