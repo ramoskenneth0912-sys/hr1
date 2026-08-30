@@ -5,6 +5,9 @@ $bodyClass = 'page-dashboard';
 require_once __DIR__ . '/includes/auth.php';
 
 // Role guards must run BEFORE any output (header.php streams HTML).
+// Unauthenticated visitors must not see this page — redirect them to login.
+requireLogin();
+
 if (isApplicant()) {
     redirect(BASE_URL . '/modules/applicant/dashboard.php');
 }
@@ -155,58 +158,3 @@ if (isHRorManager()) {
     exit;
 }
 ?>
-
-<section class="welcome-banner fade-in-up">
-    <div class="welcome-content">
-        <p class="welcome-greeting"><?= e($greeting) ?></p>
-        <h1 class="welcome-title">Merchandising Management System</h1>
-        <p class="welcome-subtitle">Recruitment &amp; Onboarding / Core HR — <?= e(APP_SUBSYSTEM) ?></p>
-    </div>
-    <div class="welcome-status">
-        <?php if (!isLoggedIn()): ?>
-        <a href="<?= BASE_URL ?>/public/jobs.php" class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);">Browse Jobs</a>
-        <?php else: ?>
-        <span class="status-label">System Status</span>
-        <span class="status-value"><span class="live-dot"></span> Synced</span>
-        <?php endif; ?>
-    </div>
-</section>
-
-<div class="dashboard-grid">
-    <div class="dash-card fade-in-up" style="animation-delay:.1s">
-        <div class="dash-card-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-        </div>
-        <h3>Available Jobs</h3>
-        <p>Browse open positions and apply online.</p>
-        <a href="<?= BASE_URL ?>/public/jobs.php" class="dash-card-link">View Jobs &rarr;</a>
-    </div>
-    <div class="dash-card fade-in-up" style="animation-delay:.2s">
-        <div class="dash-card-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <h3>Recruitment</h3>
-        <p>Manage hiring pipeline and applicants.</p>
-        <?php if (isLoggedIn() && isHRorManager()): ?>
-        <a href="<?= BASE_URL ?>/modules/applicants/index.php" class="dash-card-link">View Applicants &rarr;</a>
-        <?php else: ?>
-        <a href="<?= BASE_URL ?>/public/jobs.php" class="dash-card-link">Browse Openings &rarr;</a>
-        <?php endif; ?>
-    </div>
-    <div class="dash-card fade-in-up" style="animation-delay:.3s">
-        <div class="dash-card-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <h3>Employees</h3>
-        <p>Access employee records and management.</p>
-        <?php if (isLoggedIn() && isHRorManager()): ?>
-        <a href="<?= BASE_URL ?>/modules/hcm/index.php" class="dash-card-link">Manage Employees &rarr;</a>
-        <?php elseif (isLoggedIn()): ?>
-        <a href="<?= BASE_URL ?>/modules/employee/profile.php" class="dash-card-link">My Profile &rarr;</a>
-        <?php else: ?>
-        <a href="<?= BASE_URL ?>/auth/login.php" class="dash-card-link">Sign In &rarr;</a>
-        <?php endif; ?>
-    </div>
-</div>
-
-<?php require_once __DIR__ . '/includes/footer.php'; ?>
