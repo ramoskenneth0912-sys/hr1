@@ -32,13 +32,13 @@ class ApplicationsController
 
     public static function index(): never
     {
-        $user = Auth::requireAuth();
+        $user = Auth::requireAuth(true); // null for API keys (scope validated by router)
         self::denyEmployee();
-        $isAdmin = Auth::isAdmin();
+        $isAdmin = Auth::isApiKeyAuth() || Auth::isAdmin();
 
-        // Applicants may list their own applications, scoped to their rows;
-        // administrators see everything.
-        if (!$isAdmin && $user['role'] !== 'applicant') {
+        // API key callers are treated as admin-level (scope validated at router).
+        // User-based: applicants may list their own applications; administrators see everything.
+        if (!Auth::isApiKeyAuth() && !$isAdmin && $user['role'] !== 'applicant') {
             Response::forbidden('Only applicants and administrators may list applications.');
         }
 
@@ -116,7 +116,7 @@ class ApplicationsController
     public static function show(int $id): never
     {
         self::denyEmployee();
-        $app = self::findAuthorized($id);
+        $app = self::findAuthorized($id, true); // allow API keys (scope validated by router)
         Response::item(self::present($app), 'Application retrieved successfully');
     }
 
@@ -282,8 +282,8 @@ class ApplicationsController
     public static function update(int $id, bool $partial): never
     {
         self::denyEmployee();
-        $app = self::findAuthorized($id);
-        $isAdmin = Auth::isAdmin();
+        $app = self::findAuthorized($id, true); // allow API keys (scope validated by router)
+        $isAdmin = Auth::isApiKeyAuth() || Auth::isAdmin();
         $isOwner = (int) $app['user_id'] === (int) Auth::id()
             || (Auth::user() && strtolower(Auth::user()['email']) === strtolower($app['email']));
 
@@ -376,7 +376,7 @@ class ApplicationsController
 
     public static function destroy(int $id): never
     {
-        Auth::requireAdmin();
+        Auth::requireAdmin(true); // API keys with applicants:write scope allowed
         $app = self::findById($id);
         if (!$app) {
             Response::notFound('Application not found.');
@@ -400,13 +400,16 @@ class ApplicationsController
         return $stmt->fetch() ?: null;
     }
 
-    /** Loads the record only when the caller is admin or the owner; else 404/403. */
-    private static function findAuthorized(int $id): array
+    /** Loads the record only when the caller is admin (or API key) or the owner; else 404/403. */
+    private static function findAuthorized(int $id, bool $allowApiKey = false): array
     {
-        Auth::requireAuth();
+        Auth::requireAuth($allowApiKey);
         $app = self::findById($id);
         if (!$app) {
             Response::notFound('Application not found.');
+        }
+        if (Auth::isApiKeyAuth()) {
+            return $app; // API keys treat all applications as accessible (scope validated by router)
         }
         if (!Auth::isAdmin()) {
             $mine = ((int) ($app['user_id'] ?? 0)) === (int) Auth::id()
@@ -445,7 +448,7 @@ class ApplicationsController
             'updated_at' => $a['updated_at'],
         ];
         // Resume path is exposed to admins only, and only the filename portion.
-        if (Auth::isAdmin() && !empty($a['resume_path'])) {
+        if ((Auth::isAdmin() || Auth::isApiKeyAuth()) && !empty($a['resume_path'])) {
             $out['resume_file'] = basename((string) $a['resume_path']);
         }
         return $out;

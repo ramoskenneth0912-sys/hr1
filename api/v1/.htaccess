@@ -5,8 +5,10 @@ Options -Indexes
 
 # Apache (mod_php/CGI/FastCGI) strips the Authorization header by default.
 # Re-inject it so PHP sees HTTP_AUTHORIZATION for Bearer tokens.
+# Also re-inject X-API-Key for system-to-system API key authentication.
 <IfModule mod_setenvif.c>
     SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+    SetEnvIf X-API-Key "(.*)" HTTP_X_API_KEY=$1
 </IfModule>
 <IfModule mod_cgi.c>
     CGIPassAuth On

@@ -35,6 +35,25 @@
  *
  *   GET    departments                     → DepartmentsController::index (hr/manager)
  *
+ *   POST   api-keys                   → ApiKeysController::store     (hr/manager)
+ *   GET    api-keys                   → ApiKeysController::index     (hr/manager)
+ *   GET    api-keys/{id}              → ApiKeysController::show      (hr/manager)
+ *   PATCH  api-keys/{id}              → ApiKeysController::update    (hr/manager)
+ *   POST   api-keys/{id}/revoke       → ApiKeysController::revoke    (hr/manager)
+ *   POST   api-keys/{id}/activate     → ApiKeysController::activate  (hr/manager)
+ *   DELETE api-keys/{id}              → ApiKeysController::destroy   (hr/manager)
+ *   GET    api-keys/scopes            → ApiKeysController::scopes    (hr/manager)
+ *
+ * AUTHENTICATION METHODS:
+ *   1. X-API-Key header    → system-to-system (scope-based authorization)
+ *   2. Authorization: Bearer → user-based (role-based authorization)
+ *   3. PHP session cookie    → website frontend (role-based authorization)
+ *
+ * ENDPOINT AUTH MODE:
+ *   [public]          = no auth required (rate limited)
+ *   [user]            = Bearer token or session only (API keys not accepted)
+ *   [user or api-key] = Bearer, session, or API key with appropriate scope
+ *
  * Anything else → 404 JSON.
  */
 
@@ -48,8 +67,9 @@ require_once __DIR__ . '/controllers/ApplicationsController.php';
 require_once __DIR__ . '/controllers/UsersController.php';
 require_once __DIR__ . '/controllers/AdminController.php';
 require_once __DIR__ . '/controllers/DepartmentsController.php';
+require_once __DIR__ . '/controllers/ApiKeysController.php';
 
-// Resolve the current user before dispatching (Bearer token or site session).
+// Resolve the current caller before dispatching (API key, Bearer token, or site session).
 Auth::authenticate();
 
 $segments = route_path() === '' ? [] : explode('/', route_path());
@@ -61,6 +81,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 try {
     // ---------------- /auth -------------------------------------------------
+    // [user] endpoints — API keys cannot register/login/manage sessions.
     if ($res === 'auth') {
         switch (true) {
             case $method === 'POST' && ($segments[1] ?? '') === 'register':
@@ -77,6 +98,9 @@ try {
     }
 
     // ---------------- /jobs ---------------------------------------------------
+    // [public read, user-or-api-key write]
+    // GET is public (open jobs only). Write requires hr/manager role OR
+    // API key with jobs:read/jobs:write scope.
     if ($res === 'jobs') {
         switch (true) {
             case $method === 'GET' && $id1 === null:
@@ -84,10 +108,13 @@ try {
             case $method === 'GET' && $id1 !== null:
                 JobsController::show($id1);
             case $method === 'POST' && $id1 === null:
+                Auth::requireScope('jobs:write');
                 JobsController::store();
             case in_array($method, ['PUT', 'PATCH'], true) && $id1 !== null:
+                Auth::requireScope('jobs:write');
                 JobsController::update($id1, $method === 'PATCH');
             case $method === 'DELETE' && $id1 !== null:
+                Auth::requireScope('jobs:write');
                 JobsController::destroy($id1);
             default:
                 Response::error('Method not allowed for this endpoint.', [], 405);
@@ -95,17 +122,23 @@ try {
     }
 
     // ---------------- /applications ---------------------------------------------
+    // [user-or-api-key read, user-or-api-key write]
+    // API key callers are treated as admin-level (see ApplicationsController).
     if ($res === 'applications') {
         switch (true) {
             case $method === 'GET' && $id1 === null:
+                Auth::requireScope('applicants:read');
                 ApplicationsController::index();
             case $method === 'GET' && $id1 !== null:
+                Auth::requireScope('applicants:read');
                 ApplicationsController::show($id1);
             case $method === 'POST' && $id1 === null:
-                ApplicationsController::store();
+                ApplicationsController::store(); // public (rate-limited)
             case in_array($method, ['PUT', 'PATCH'], true) && $id1 !== null:
+                Auth::requireScope('applicants:write');
                 ApplicationsController::update($id1, $method === 'PATCH');
             case $method === 'DELETE' && $id1 !== null:
+                Auth::requireScope('applicants:write');
                 ApplicationsController::destroy($id1);
             default:
                 Response::error('Method not allowed for this endpoint.', [], 405);
@@ -113,6 +146,8 @@ try {
     }
 
     // ---------------- /users --------------------------------------------------------
+    // [user] endpoints — user data management requires Bearer/session auth.
+    // API keys cannot access user records.
     if ($res === 'users') {
         switch (true) {
             case $method === 'GET' && $id1 === null:
@@ -129,6 +164,7 @@ try {
     }
 
     // ---------------- /departments --------------------------------------------------------
+    // [user] endpoints — departments listing requires hr/manager.
     if ($res === 'departments') {
         switch (true) {
             case $method === 'GET' && $id1 === null:
@@ -139,6 +175,7 @@ try {
     }
 
     // ---------------- /admin -------------------------------------------------------------
+    // [user] endpoints — admin operations require Bearer/session auth.
     if ($res === 'admin') {
         switch (true) {
             case $method === 'GET' && ($segments[1] ?? '') === 'stats' && count($segments) === 2:
@@ -150,6 +187,32 @@ try {
                     AdminController::applicationStatus($id2);
                 }
                 AdminController::setApplicationStatus($id2);
+            default:
+                Response::notFound('Endpoint not found.');
+        }
+    }
+
+    // ---------------- /api-keys ---------------------------------------------------------
+    // [user] endpoints — API key management requires hr/manager Bearer/session auth.
+    // API keys cannot manage themselves.
+    if ($res === 'api-keys') {
+        switch (true) {
+            case $method === 'GET' && ($segments[1] ?? '') === 'scopes' && count($segments) === 2:
+                ApiKeysController::scopes();
+            case $method === 'POST' && $id1 === null:
+                ApiKeysController::store();
+            case $method === 'GET' && $id1 === null:
+                ApiKeysController::index();
+            case $method === 'GET' && $id1 !== null && count($segments) === 2:
+                ApiKeysController::show($id1);
+            case in_array($method, ['PUT', 'PATCH'], true) && $id1 !== null && count($segments) === 2:
+                ApiKeysController::update($id1);
+            case $method === 'POST' && $id1 !== null && ($segments[2] ?? '') === 'revoke' && count($segments) === 3:
+                ApiKeysController::revoke($id1);
+            case $method === 'POST' && $id1 !== null && ($segments[2] ?? '') === 'activate' && count($segments) === 3:
+                ApiKeysController::activate($id1);
+            case $method === 'DELETE' && $id1 !== null && count($segments) === 2:
+                ApiKeysController::destroy($id1);
             default:
                 Response::notFound('Endpoint not found.');
         }

@@ -21,6 +21,7 @@ require_once BASE_PATH . '/includes/functions.php'; // e(), generateCode() — s
 require_once __DIR__ . '/lib/Response.php';
 require_once __DIR__ . '/lib/RateLimit.php';
 require_once __DIR__ . '/lib/Auth.php';
+require_once __DIR__ . '/lib/ApiKeyAuth.php';
 require_once __DIR__ . '/lib/Validator.php';
 
 // ---- JSON + security headers --------------------------------------------
@@ -48,7 +49,7 @@ if ($requestOrigin !== '' && in_array(rtrim($requestOrigin, '/'), $allowedOrigin
     header('Vary: Origin');
     header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key');
     header('Access-Control-Max-Age: 86400');
 }
 

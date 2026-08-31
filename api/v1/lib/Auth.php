@@ -1,7 +1,11 @@
 <?php
 /**
- * API authentication — Bearer tokens on top of the EXISTING users table.
- * Passwords are verified with password_verify(); only SHA-256 token hashes
+ * API authentication — supports three methods:
+ *   1. API key (X-API-Key header) — system-to-system, scope-based authorization
+ *   2. Bearer token (Authorization header) — user-based, role-based authorization
+ *   3. PHP session (cookie) — website frontend, role-based authorization
+ *
+ * Passwords are verified with password_verify(); only SHA-256 token/key hashes
  * are stored. A valid website PHP session also authenticates API calls so
  * the existing front-end can talk to the API without a second login.
  */
@@ -35,6 +39,9 @@ class Auth
     private static ?array $user = null;
     /** Raw bearer token of the current request (for logout revocation). */
     private static ?string $bearer = null;
+
+    /** Which authentication method resolved this request: 'api_key', 'bearer', 'session', or null. */
+    private static ?string $authMethod = null;
 
     // ---- Credential check (same rules as the website login) -------------
 
@@ -111,11 +118,41 @@ class Auth
         return self::$bearer = '';
     }
 
-    /** Resolve the current user via Bearer token or existing website session. */
+    /**
+     * Resolve the current caller via API key, Bearer token, or website session.
+     *
+     * Authentication priority:
+     *   1. X-API-Key header  → ApiKeyAuth (scope-based, no user context)
+     *   2. Authorization: Bearer → api_tokens table (user context)
+     *   3. PHP session cookie    → users table (user context)
+     *
+     * An invalid/explicit Bearer token still does NOT fall back to the session.
+     * An invalid API key does NOT fall back to Bearer or session.
+     */
     public static function authenticate(): void
     {
+        // 1) Try API key authentication (X-API-Key header)
+        if (ApiKeyAuth::keyFromHeader() !== '') {
+            if (ApiKeyAuth::authenticate()) {
+                self::$authMethod = 'api_key';
+                // API keys do NOT set self::$user — they identify a system, not a user.
+                // Controllers must check Auth::authMethod() and use ApiKeyAuth::requireScope().
+            } else {
+                // Invalid API key — 401 was already sent by ApiKeyAuth or it returned false
+                Response::unauthorized('Invalid or rejected API key.');
+            }
+            // Close any session that might have been started
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                header_remove('Set-Cookie');
+                session_write_close();
+            }
+            return;
+        }
+
+        // 2) Try Bearer token authentication
         $token = self::bearerFromHeader();
         if ($token !== '') {
+            self::$authMethod = 'bearer';
             $stmt = db()->prepare(
                 'SELECT u.id, u.username, u.email, u.role
                  FROM api_tokens t JOIN users u ON u.id = t.user_id
@@ -135,7 +172,9 @@ class Auth
                 Response::unauthorized('Invalid or expired API token.');
             }
         } else {
+            // 3) Try session authentication (website frontend)
             if (!empty($_SESSION['user_id'])) {
+                self::$authMethod = 'session';
                 $stmt = db()->prepare(
                     'SELECT id, username, email, role FROM users WHERE id = :id AND is_active = 1 LIMIT 1'
                 );
@@ -154,6 +193,8 @@ class Auth
             session_write_close();
         }
     }
+
+    // ---- Auth state accessors --------------------------------------------
 
     public static function user(): ?array
     {
@@ -175,22 +216,71 @@ class Auth
         return in_array(self::role(), ['hr', 'manager'], true);
     }
 
-    public static function requireAuth(): array
+    /** Which authentication method was used: 'api_key', 'bearer', 'session', or null. */
+    public static function authMethod(): ?string
     {
+        return self::$authMethod;
+    }
+
+    /** True when the request was authenticated via an API key (not user-based). */
+    public static function isApiKeyAuth(): bool
+    {
+        return self::$authMethod === 'api_key';
+    }
+
+    // ---- Authorization guards --------------------------------------------
+
+    /**
+     * Require any valid authentication (API key, Bearer token, or session).
+     *
+     * @param bool $allowApiKeyWhenScoped  When true, API key auth is accepted
+     *        without a user record (caller must have validated scope at route level).
+     *        When false (default), API key auth is rejected with a 403.
+     */
+    public static function requireAuth(bool $allowApiKeyWhenScoped = false): ?array
+    {
+        if (self::isApiKeyAuth()) {
+            if ($allowApiKeyWhenScoped) {
+                return null; // scope validated at route level, no user context
+            }
+            Response::forbidden('This endpoint requires user authentication (Bearer token or session).');
+        }
         if (!self::$user) {
             Response::unauthorized();
         }
         return self::$user;
     }
 
-    /** hr + manager are the administrator roles of this system. */
-    public static function requireAdmin(): array
+    /**
+     * Require administrator access: either hr/manager role OR an API key
+     * with the appropriate write scope for the resource.
+     *
+     * @param bool $allowApiKeyWhenScoped  When true, API key auth is accepted
+     *        (caller must have validated write scope at route level).
+     */
+    public static function requireAdmin(bool $allowApiKeyWhenScoped = false): ?array
     {
-        $user = self::requireAuth();
+        $user = self::requireAuth($allowApiKeyWhenScoped);
+        // API key auth: requireAuth() returns null — scope was validated by router.
+        if ($user === null) {
+            return null;
+        }
+        // User-based auth: check role.
         if (!self::isAdmin()) {
             Response::forbidden('Administrator access required.');
         }
         return $user;
+    }
+
+    /**
+     * Require a specific API key scope. Only enforced when authenticated via API key.
+     * When authenticated via Bearer/session, this is a no-op (user auth bypasses scope checks).
+     */
+    public static function requireScope(string $scope): void
+    {
+        if (self::isApiKeyAuth()) {
+            ApiKeyAuth::requireScope($scope);
+        }
     }
 
     // ---- Value normalisation shared across controllers --------------------

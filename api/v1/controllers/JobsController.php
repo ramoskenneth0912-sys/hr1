@@ -143,7 +143,7 @@ class JobsController
 
     public static function store(): never
     {
-        Auth::requireAdmin();
+        Auth::requireAdmin(true); // API keys with jobs:write scope allowed (validated by router)
         $in = api_body();
 
         $in['employment_type'] = Auth::normalizeEmployment(
@@ -238,7 +238,7 @@ class JobsController
 
     public static function update(int $id, bool $partial): never
     {
-        Auth::requireAdmin();
+        Auth::requireAdmin(true); // API keys with jobs:write scope allowed
 
         $stmt = db()->prepare('SELECT id FROM job_postings WHERE id = :id LIMIT 1');
         $stmt->execute([':id' => $id]);
@@ -326,7 +326,7 @@ class JobsController
 
     public static function destroy(int $id): never
     {
-        Auth::requireAdmin();
+        Auth::requireAdmin(true); // API keys with jobs:write scope allowed
         $stmt = db()->prepare('DELETE FROM job_postings WHERE id = :id');
         $stmt->execute([':id' => $id]);
         if ($stmt->rowCount() === 0) {
