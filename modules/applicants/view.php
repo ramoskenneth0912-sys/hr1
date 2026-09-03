@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 requireHRorManager();
 
 require_once __DIR__ . '/../../includes/ai_screening.php';
+require_once __DIR__ . '/../../includes/exam.php';
 
 $id = (int) ($_GET['id'] ?? 0);
 $stmt = db()->prepare(
@@ -211,5 +212,82 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </section>
 <?php endif; ?>
+
+<?php
+// === Examination panel (HR1 exam side) ===
+$isExamEligible = applicantExamEligible($applicant);
+$matchingExams = $isExamEligible ? activeExamsForJob((int) $applicant['job_posting_id']) : [];
+$asnRows = db()->prepare(
+    'SELECT ea.*, e.title AS exam_title, e.source_provider,
+            er.passed AS result_passed, er.percentage AS result_percentage, er.result_status
+     FROM exam_assignments ea
+     LEFT JOIN exams e ON e.id = ea.exam_id
+     LEFT JOIN exam_attempts at ON at.assignment_id = ea.id
+     LEFT JOIN exam_results er ON er.attempt_id = at.id
+     WHERE ea.applicant_id = ?
+     ORDER BY ea.invited_at DESC'
+);
+$asnRows->execute([$id]);
+$applicantAssignments = $asnRows->fetchAll();
+?>
+<section class="panel fade-in-up" style="animation-delay:.22s;">
+    <div class="panel-header">
+        <h2>Examination</h2>
+        <a href="<?= BASE_URL ?>/modules/recruitment/exams/assign.php?applicant_id=<?= $id ?>" class="btn btn-sm btn-outline">Manage Assignments</a>
+    </div>
+    <?php if (!$isExamEligible): ?>
+    <p style="color:var(--muted);margin:0;">This applicant is not yet eligible for an examination. Eligibility requires passing initial screening (<strong>Accepted</strong> or <strong>Passed Screening</strong>) and being linked to a Job/Position.</p>
+    <?php elseif (empty($matchingExams)): ?>
+    <p style="color:var(--muted);margin:0;">Eligible — no examination <strong>reference</strong> is defined for the applied position "<?= e($applicant['position_applied']) ?>" yet. HR1 can still represent an <em>exam request</em> for this applicant, which the future external provider (HR3) will fulfil.</p>
+    <?php else: ?>
+    <p style="color:var(--muted);margin:0 0 .75rem;">Eligible — <?= count($matchingExams) ?> active examination reference(s) available for "<?= e($applicant['position_applied']) ?>".</p>
+    <?php endif; ?>
+
+    <?php $finalInterviewEligible = applicantFinalInterviewEligible($applicant); ?>
+    <?php if ($finalInterviewEligible): ?>
+    <div class="alert alert-success" style="margin-top:.75rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <span><strong>Final Interview eligible</strong> — this applicant passed their examination.</span>
+        <a href="<?= BASE_URL ?>/modules/recruitment/interview_create.php" class="btn btn-sm btn-primary">Schedule Final Interview</a>
+    </div>
+    <?php endif; ?>
+
+    <?php if (!empty($applicantAssignments)): ?>
+    <div class="table-wrap" style="margin-top:1rem;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Examination</th>
+                <th>Assignment Status</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($applicantAssignments as $a): ?>
+            <tr>
+                <td>
+                    <?php if (!empty($a['exam_title'])): ?>
+                    <?= e($a['exam_title']) ?> <small style="color:var(--muted)">(<?= e($a['source_provider']) ?>)</small>
+                    <?php else: ?>
+                    <em>Examination requested (awaiting external provider)</em>
+                    <?php endif; ?>
+                </td>
+                <td><?= statusBadge($a['status']) ?></td>
+                <td>
+                    <?php if ($a['result_status'] !== null): ?>
+                    <span class="badge <?= $a['result_passed'] ? 'badge-success' : 'badge-danger' ?>"><?= $a['result_passed'] ? 'Passed' : 'Failed' ?></span>
+                    <span><?= e((string) $a['result_percentage']) ?>%</span>
+                    <?php else: ?>
+                    <span class="text-muted">No result returned yet</span>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    </div>
+    <?php elseif ($isExamEligible && !empty($matchingExams)): ?>
+    <a href="<?= BASE_URL ?>/modules/recruitment/exams/assign.php?applicant_id=<?= $id ?>" class="btn btn-sm btn-primary" style="margin-top:1rem;">Assign Examination</a>
+    <?php endif; ?>
+</section>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

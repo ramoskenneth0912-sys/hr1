@@ -8,14 +8,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'leave_request') {
         essAssertOwnOrManager((int) $_POST['employee_id']);
+
+        $leaveType = trim((string) ($_POST['leave_type'] ?? ''));
+        $startDate = trim((string) ($_POST['start_date'] ?? ''));
+        $endDate = trim((string) ($_POST['end_date'] ?? ''));
+
+        $leaveErrors = [];
+        if ($leaveType === '') {
+            $leaveErrors[] = 'Leave type is required.';
+        }
+        if ($startDate === '') {
+            $leaveErrors[] = 'Start date is required.';
+        }
+        if ($endDate === '') {
+            $leaveErrors[] = 'End date is required.';
+        }
+        if (!$leaveErrors) {
+            $leaveErrors = validateDateRange($startDate, $endDate, true);
+        }
+        if ($leaveErrors) {
+            flash('danger', implode(' ', $leaveErrors));
+            redirect(BASE_URL . '/modules/ess/index.php');
+        }
+
         db()->prepare(
             'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, reason)
              VALUES (?,?,?,?,?)'
         )->execute([
             (int) $_POST['employee_id'],
-            $_POST['leave_type'],
-            $_POST['start_date'],
-            $_POST['end_date'],
+            $leaveType,
+            $startDate,
+            $endDate,
             trim($_POST['reason'] ?? ''),
         ]);
         flash('success', 'Leave request submitted.');
@@ -57,6 +80,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_profile') {
         $employeeId = (int) $_POST['employee_id'];
         essAssertOwnOrManager($employeeId);
+
+        if (($dobErr = validateDateOfBirth($_POST['birth_date'] ?? null)) !== null) {
+            flash('danger', $dobErr);
+            redirect(BASE_URL . '/modules/ess/index.php?employee_id=' . $employeeId);
+        }
+
         $exists = db()->prepare('SELECT id FROM ess_profiles WHERE employee_id = ?');
         $exists->execute([$employeeId]);
 
@@ -163,7 +192,7 @@ if ($selectedEmployeeId) {
                 </select>
             </div>
             <div class="form-group">
-                <label for="leave_type">Leave Type</label>
+                <label for="leave_type">Leave Type *</label>
                 <select id="leave_type" name="leave_type" required>
                     <?php foreach (['vacation','sick','emergency','maternity','paternity','unpaid'] as $t): ?>
                     <option value="<?= $t ?>"><?= ucfirst($t) ?></option>
@@ -171,12 +200,12 @@ if ($selectedEmployeeId) {
                 </select>
             </div>
             <div class="form-group">
-                <label for="start_date">Start Date</label>
-                <input type="date" id="start_date" name="start_date" required>
+                <label for="start_date">Start Date *</label>
+                <input type="date" id="start_date" name="start_date" required min="<?= date('Y-m-d') ?>">
             </div>
             <div class="form-group">
-                <label for="end_date">End Date</label>
-                <input type="date" id="end_date" name="end_date" required>
+                <label for="end_date">End Date *</label>
+                <input type="date" id="end_date" name="end_date" required min="<?= date('Y-m-d') ?>">
             </div>
             <div class="form-group">
                 <label for="reason">Reason</label>
@@ -211,7 +240,7 @@ if ($selectedEmployeeId) {
             </div>
             <div class="form-group">
                 <label for="birth_date">Birth Date</label>
-                <input type="date" id="birth_date" name="birth_date" value="<?= e($profile['birth_date'] ?? '') ?>">
+                <input type="date" id="birth_date" name="birth_date" value="<?= e($profile['birth_date'] ?? '') ?>" max="<?= date('Y-m-d') ?>">
             </div>
             <div class="form-group">
                 <label for="marital_status">Marital Status</label>

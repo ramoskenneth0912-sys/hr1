@@ -14,6 +14,10 @@ laravel-api/vendor/
 # Sensitive web-accessible files
 storage/api/rate_limits/
 storage/api/error.log
+storage/web_rate_limits/
+
+# Uploaded files (resumes/documents) - runtime data, not source
+/uploads/
 
 # OS files
 .DS_Store
@@ -35,6 +39,10 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Sendmail crash logs
+crash*.txt
+crash*.log
 
 # Test files (not for production)
 /tests/

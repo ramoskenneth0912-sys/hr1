@@ -33,6 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('danger', 'Interview date is required.');
         redirect(BASE_URL . '/modules/applicants/schedule_interview.php?id=' . $id);
     }
+    if (($err = validateFutureDate($interviewDate)) !== null) {
+        flash('danger', $err);
+        redirect(BASE_URL . '/modules/applicants/schedule_interview.php?id=' . $id);
+    }
     if ($interviewTime !== '' && !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $interviewTime)) {
         flash('danger', 'Interview time is invalid.');
         redirect(BASE_URL . '/modules/applicants/schedule_interview.php?id=' . $id);
@@ -166,7 +170,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <div class="form-grid">
         <div class="form-group">
             <label for="interview_date">Interview Date *</label>
-            <input type="date" id="interview_date" name="interview_date" required>
+            <input type="date" id="interview_date" name="interview_date" required min="<?= date('Y-m-d') ?>">
         </div>
         <div class="form-group">
             <label for="interview_time">Interview Time</label>

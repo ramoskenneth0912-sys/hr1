@@ -35,6 +35,11 @@
  *
  *   GET    departments                     → DepartmentsController::index (hr/manager)
  *
+ *   POST   exams                          → ExamProvisioningController::provision (HR3 → HR1 exam ingest; exams:write)
+ *   GET    exams                          → ExamProvisioningController::list     (exams:read)
+ *   GET    exams/{id}                     → ExamProvisioningController::show     (exams:read)
+ *
+ *   POST   exam-results                   → ExamResultsController::ingest   (HR3 → HR1 result ingest; exams:results:write)
  *   POST   api-keys                   → ApiKeysController::store     (hr/manager)
  *   GET    api-keys                   → ApiKeysController::index     (hr/manager)
  *   GET    api-keys/{id}              → ApiKeysController::show      (hr/manager)
@@ -68,6 +73,8 @@ require_once __DIR__ . '/controllers/UsersController.php';
 require_once __DIR__ . '/controllers/AdminController.php';
 require_once __DIR__ . '/controllers/DepartmentsController.php';
 require_once __DIR__ . '/controllers/ApiKeysController.php';
+require_once __DIR__ . '/controllers/ExamResultsController.php';
+require_once __DIR__ . '/controllers/ExamProvisioningController.php';
 
 // Resolve the current caller before dispatching (API key, Bearer token, or site session).
 Auth::authenticate();
@@ -187,6 +194,39 @@ try {
                     AdminController::applicationStatus($id2);
                 }
                 AdminController::setApplicationStatus($id2);
+            default:
+                Response::notFound('Endpoint not found.');
+        }
+    }
+
+    // ---------------- /exams -------------------------------------------------
+    // [user-or-api-key] HR3 → HR1 examination provisioning boundary.
+    //   POST /exams        -> HR3 provides a new exam to HR1 (scope exams:write)
+    //   GET  /exams        -> list exams (scope exams:read)
+    //   GET  /exams/{id}   -> show one exam (scope exams:read)
+    if ($res === 'exams') {
+        switch (true) {
+            case $method === 'POST' && $id1 === null:
+                ExamProvisioningController::provision(false);
+            case $method === 'GET' && $id1 === null:
+                ExamProvisioningController::list();
+            case $method === 'GET' && $id1 !== null && count($segments) === 2:
+                ExamProvisioningController::show($id1);
+            default:
+                Response::notFound('Endpoint not found.');
+        }
+    }
+
+    // ---------------- /exam-results --------------------------------------------
+    // [user-or-api-key] External examination result ingestion.
+    // API key scope exams:results:write for POST (the future HR3 system-to-system
+    // path); exams:read for GET. Bearer/session hr|manager callers bypass scopes.
+    if ($res === 'exam-results') {
+        switch (true) {
+            case $method === 'POST' && $id1 === null:
+                ExamResultsController::ingest();
+            case $method === 'GET' && $id1 === null:
+                ExamResultsController::show();
             default:
                 Response::notFound('Endpoint not found.');
         }

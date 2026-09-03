@@ -17,14 +17,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/employee/leave.php');
     }
 
+    $leaveType = trim((string) ($_POST['leave_type'] ?? ''));
+    $startDate = trim((string) ($_POST['start_date'] ?? ''));
+    $endDate = trim((string) ($_POST['end_date'] ?? ''));
+
+    $leaveErrors = [];
+    if ($leaveType === '') {
+        $leaveErrors[] = 'Leave type is required.';
+    }
+    if ($startDate === '') {
+        $leaveErrors[] = 'Start date is required.';
+    }
+    if ($endDate === '') {
+        $leaveErrors[] = 'End date is required.';
+    }
+    if (!$leaveErrors) {
+        $leaveErrors = validateDateRange($startDate, $endDate, true);
+    }
+    if ($leaveErrors) {
+        flash('danger', implode(' ', $leaveErrors));
+        redirect(BASE_URL . '/modules/employee/leave.php');
+    }
+
     db()->prepare(
         'INSERT INTO leave_requests (employee_id, leave_type, start_date, end_date, reason)
          VALUES (?,?,?,?,?)'
     )->execute([
         $employeeId,
-        $_POST['leave_type'],
-        $_POST['start_date'],
-        $_POST['end_date'],
+        $leaveType,
+        $startDate,
+        $endDate,
         trim($_POST['reason'] ?? ''),
     ]);
     flash('success', 'Leave request submitted.');
@@ -122,7 +144,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <?= csrf_field() ?>
         <div class="form-grid">
             <div class="form-group">
-                <label for="leave_type">Leave Type</label>
+                <label for="leave_type">Leave Type *</label>
                 <select id="leave_type" name="leave_type" required>
                     <?php foreach (['vacation','sick','emergency','maternity','paternity','unpaid'] as $t): ?>
                     <option value="<?= $t ?>"><?= ucfirst($t) ?></option>
@@ -130,12 +152,12 @@ require_once __DIR__ . '/../../includes/header.php';
                 </select>
             </div>
             <div class="form-group">
-                <label for="start_date">Start Date</label>
-                <input type="date" id="start_date" name="start_date" required>
+                <label for="start_date">Start Date *</label>
+                <input type="date" id="start_date" name="start_date" required min="<?= date('Y-m-d') ?>">
             </div>
             <div class="form-group">
-                <label for="end_date">End Date</label>
-                <input type="date" id="end_date" name="end_date" required>
+                <label for="end_date">End Date *</label>
+                <input type="date" id="end_date" name="end_date" required min="<?= date('Y-m-d') ?>">
             </div>
             <div class="form-group full-width">
                 <label for="reason">Reason</label>

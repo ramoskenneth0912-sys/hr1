@@ -1,178 +1,149 @@
 <?php
+/**
+ * Onboarding Dashboard — lists hired applicants in onboarding pipeline.
+ * Tabs: Hired (not started) | In Progress | Completed
+ */
 require_once __DIR__ . '/../../includes/auth.php';
 requireHRorManager();
+require_once __DIR__ . '/../../includes/onboarding.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    csrf_require();
-    if ($_POST['action'] === 'start_onboarding') {
-        $employeeId = (int) $_POST['employee_id'];
-        $tasks = db()->query('SELECT id FROM onboarding_tasks ORDER BY sort_order')->fetchAll();
-
-        $check = db()->prepare('SELECT COUNT(*) FROM employee_onboarding WHERE employee_id = ?');
-        $check->execute([$employeeId]);
-        if ((int) $check->fetchColumn() === 0) {
-            $insert = db()->prepare('INSERT INTO employee_onboarding (employee_id, task_id) VALUES (?, ?)');
-            foreach ($tasks as $task) {
-                $insert->execute([$employeeId, $task['id']]);
-            }
-            flash('success', 'Onboarding checklist started for employee.');
-        } else {
-            flash('warning', 'Onboarding already exists for this employee.');
-        }
-        redirect(BASE_URL . '/modules/onboarding/index.php?employee_id=' . $employeeId);
-    }
-
-    if ($_POST['action'] === 'update_task') {
-        $stmt = db()->prepare(
-            'UPDATE employee_onboarding SET status=?, completed_date=?, completed_by=?, notes=? WHERE id=?'
-        );
-        $status = $_POST['status'];
-        $completedDate = $status === 'completed' ? date('Y-m-d') : null;
-        $stmt->execute([
-            $status,
-            $completedDate,
-            trim($_POST['completed_by'] ?? ''),
-            trim($_POST['notes'] ?? ''),
-            (int) $_POST['onboarding_id'],
-        ]);
-        flash('success', 'Task updated.');
-        redirect(BASE_URL . '/modules/onboarding/index.php?employee_id=' . (int) $_POST['employee_id']);
-    }
+$activeTab = $_GET['tab'] ?? 'hired';
+$validTabs = ['hired', 'progress', 'completed'];
+if (!in_array($activeTab, $validTabs, true)) {
+    $activeTab = 'hired';
 }
 
-$pageTitle = 'New Hire Onboarding';
+$hiredApplicants = [];
+if ($activeTab === 'hired') {
+    $hiredApplicants = db()->query(
+        "SELECT a.*, d.name AS department_name
+         FROM applicants a
+         LEFT JOIN departments d ON d.id = a.department_id
+         WHERE a.status = 'hired'
+           AND (a.onboarding_status IS NULL OR a.onboarding_status = '')
+         ORDER BY a.applied_date DESC"
+    )->fetchAll();
+} elseif ($activeTab === 'progress') {
+    $hiredApplicants = db()->query(
+        "SELECT a.*, d.name AS department_name, op.current_stage, op.started_at
+         FROM applicants a
+         LEFT JOIN departments d ON d.id = a.department_id
+         JOIN onboarding_progress op ON op.applicant_id = a.id
+         WHERE a.status = 'hired'
+           AND op.current_stage <> 'onboarding_completed'
+         ORDER BY op.started_at DESC"
+    )->fetchAll();
+} else {
+    $hiredApplicants = db()->query(
+        "SELECT a.*, d.name AS department_name, op.onboarding_completed_at, op.account_created_at
+         FROM applicants a
+         LEFT JOIN departments d ON d.id = a.department_id
+         JOIN onboarding_progress op ON op.applicant_id = a.id
+         WHERE a.status = 'hired'
+           AND op.current_stage = 'onboarding_completed'
+         ORDER BY op.onboarding_completed_at DESC"
+    )->fetchAll();
+}
+
+$pageTitle = 'Onboarding';
 $currentModule = 'onboarding';
 require_once __DIR__ . '/../../includes/header.php';
-
-$employees = getEmployees();
-$selectedEmployeeId = (int) ($_GET['employee_id'] ?? 0);
-
-$onboardingRows = [];
-$selectedEmployee = null;
-
-if ($selectedEmployeeId) {
-    $stmt = db()->prepare('SELECT * FROM employees WHERE id = ?');
-    $stmt->execute([$selectedEmployeeId]);
-    $selectedEmployee = $stmt->fetch();
-
-    $stmt = db()->prepare(
-        'SELECT eo.*, ot.task_name, ot.category, ot.description
-         FROM employee_onboarding eo
-         JOIN onboarding_tasks ot ON eo.task_id = ot.id
-         WHERE eo.employee_id = ?
-         ORDER BY ot.sort_order'
-    );
-    $stmt->execute([$selectedEmployeeId]);
-    $onboardingRows = $stmt->fetchAll();
-}
-
-$summary = db()->query(
-    'SELECT e.id, e.employee_no, e.first_name, e.last_name,
-            COUNT(eo.id) AS total_tasks,
-            SUM(CASE WHEN eo.status = "completed" THEN 1 ELSE 0 END) AS completed_tasks
-     FROM employees e
-     LEFT JOIN employee_onboarding eo ON e.id = eo.employee_id
-     WHERE e.status = "active"
-     GROUP BY e.id
-     HAVING total_tasks > 0
-     ORDER BY e.last_name'
-)->fetchAll();
 ?>
 
 <div class="page-header fade-in-up">
     <div>
         <h1 class="page-title">New Hire Onboarding</h1>
-        <p class="page-subtitle">Module 3 — Onboarding checklists and task tracking</p>
+        <p class="page-subtitle">Track hired applicants through the onboarding pipeline</p>
     </div>
 </div>
 
+<section class="panel fade-in-up" style="animation-delay:.05s">
+    <div class="tab-bar">
+        <?php
+        $tabCounts = [
+            'hired'     => db()->query("SELECT COUNT(*) FROM applicants WHERE status='hired' AND (onboarding_status IS NULL OR onboarding_status='')")->fetchColumn(),
+            'progress'  => db()->query("SELECT COUNT(*) FROM applicants a JOIN onboarding_progress op ON op.applicant_id=a.id WHERE a.status='hired' AND op.current_stage<>'onboarding_completed'")->fetchColumn(),
+            'completed' => db()->query("SELECT COUNT(*) FROM applicants a JOIN onboarding_progress op ON op.applicant_id=a.id WHERE a.status='hired' AND op.current_stage='onboarding_completed'")->fetchColumn(),
+        ];
+        foreach (['hired' => 'Hired (Not Started)', 'progress' => 'In Progress', 'completed' => 'Completed'] as $key => $label): ?>
+        <a href="?tab=<?= $key ?>" class="tab-link <?= $activeTab === $key ? 'active' : '' ?>">
+            <?= $label ?> <span class="tab-count"><?= $tabCounts[$key] ?></span>
+        </a>
+        <?php endforeach; ?>
+    </div>
+</section>
+
+<?php if (empty($hiredApplicants)): ?>
 <section class="panel fade-in-up" style="animation-delay:.1s">
-    <h2>Start Onboarding</h2>
-    <form method="post" class="inline-form">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="start_onboarding">
-        <select name="employee_id" required>
-            <option value="">— Select Employee —</option>
-            <?php foreach ($employees as $emp): ?>
-            <option value="<?= (int) $emp['id'] ?>" <?= $selectedEmployeeId === (int) $emp['id'] ? 'selected' : '' ?>>
-                <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
-            </option>
-            <?php endforeach; ?>
-        </select>
-        <button type="submit" class="btn btn-primary">Start Checklist</button>
-    </form>
+    <p style="text-align:center;padding:2rem 0;color:var(--text-muted);">
+        <?php if ($activeTab === 'hired'): ?>
+            No hired applicants pending onboarding.
+        <?php elseif ($activeTab === 'progress'): ?>
+            No applicants currently in onboarding.
+        <?php else: ?>
+            No completed onboardings yet.
+        <?php endif; ?>
+    </p>
 </section>
-
-<?php if ($summary): ?>
-<section class="panel fade-in-up" style="animation-delay:.2s">
-    <h2>Onboarding Progress</h2>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Employee</th>
-                <th>Progress</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($summary as $row):
-                $pct = $row['total_tasks'] > 0 ? round(($row['completed_tasks'] / $row['total_tasks']) * 100) : 0;
-            ?>
-            <tr>
-                <td><?= e($row['employee_no'] . ' — ' . $row['first_name'] . ' ' . $row['last_name']) ?></td>
-                <td>
-                    <div class="progress-bar"><div class="progress-fill" style="width:<?= $pct ?>%"></div></div>
-                    <?= (int) $row['completed_tasks'] ?> / <?= (int) $row['total_tasks'] ?> (<?= $pct ?>%)
-                </td>
-                <td><a href="?employee_id=<?= (int) $row['id'] ?>" class="btn btn-sm">View Tasks</a></td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-</section>
-<?php endif; ?>
-
-<?php if ($selectedEmployee && $onboardingRows): ?>
-<section class="panel fade-in-up" style="animation-delay:.3s">
-    <h2>Checklist: <?= e($selectedEmployee['first_name'] . ' ' . $selectedEmployee['last_name']) ?></h2>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Task</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Completed</th>
-                <th>Update</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($onboardingRows as $task): ?>
-            <tr>
-                <td>
-                    <strong><?= e($task['task_name']) ?></strong>
-                    <?php if ($task['description']): ?><br><small><?= e($task['description']) ?></small><?php endif; ?>
-                </td>
-                <td><?= e(ucfirst(str_replace('_', ' ', $task['category']))) ?></td>
-                <td><?= statusBadge($task['status']) ?></td>
-                <td><?= formatDate($task['completed_date']) ?></td>
-                <td>
-                    <form method="post" class="inline-form compact">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="update_task">
-                        <input type="hidden" name="onboarding_id" value="<?= (int) $task['id'] ?>">
-                        <input type="hidden" name="employee_id" value="<?= $selectedEmployeeId ?>">
-                        <select name="status">
-                            <?php foreach (['pending','in_progress','completed'] as $s): ?>
-                            <option value="<?= $s ?>" <?= $task['status'] === $s ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $s)) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="submit" class="btn btn-sm">Save</button>
-                    </form>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+<?php else: ?>
+<section class="panel fade-in-up" style="animation-delay:.1s">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Applicant</th>
+                    <th>Position</th>
+                    <th>Department</th>
+                    <th>Hire Date</th>
+                    <?php if ($activeTab === 'hired'): ?>
+                        <th>Status</th>
+                    <?php elseif ($activeTab === 'progress'): ?>
+                        <th>Current Stage</th>
+                        <th>Progress</th>
+                    <?php else: ?>
+                        <th>Completed</th>
+                    <?php endif; ?>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($hiredApplicants as $a): ?>
+                <tr>
+                    <td>
+                        <strong><?= e($a['first_name'] . ' ' . $a['last_name']) ?></strong>
+                        <br><small style="color:var(--text-muted)"><?= e($a['applicant_no']) ?></small>
+                    </td>
+                    <td><?= e($a['position_applied']) ?></td>
+                    <td><?= e($a['department_name'] ?? '—') ?></td>
+                    <td><?= formatDate($a['applied_date']) ?></td>
+                    <?php if ($activeTab === 'hired'): ?>
+                        <td><?= statusBadge('hired') ?></td>
+                    <?php elseif ($activeTab === 'progress'): ?>
+                        <td><?= statusBadge(str_replace('_', ' ', $a['current_stage'])) ?></td>
+                        <td>
+                            <?php
+                            $stages = onboardingStages();
+                            $idx = array_search($a['current_stage'], $stages);
+                            $pct = $idx !== false ? round(($idx + 1) / count($stages) * 100) : 0;
+                            ?>
+                            <div class="progress-bar" style="width:120px;display:inline-block;vertical-align:middle;">
+                                <div class="progress-fill" style="width:<?= $pct ?>%"></div>
+                            </div>
+                            <?= $idx !== false ? ($idx + 1) . '/' . count($stages) : '0/' . count($stages) ?>
+                        </td>
+                    <?php else: ?>
+                        <td><?= formatDate($a['onboarding_completed_at'] ?? null) ?></td>
+                    <?php endif; ?>
+                    <td>
+                        <a href="applicant_view.php?id=<?= (int) $a['id'] ?>" class="btn btn-sm btn-primary">
+                            <?= $activeTab === 'hired' ? 'Start Onboarding' : 'View Progress' ?>
+                        </a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
 </section>
 <?php endif; ?>
 

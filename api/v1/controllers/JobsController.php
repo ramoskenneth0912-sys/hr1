@@ -169,8 +169,16 @@ class JobsController
                 $d = DateTime::createFromFormat('Y-m-d', trim((string) $in[$f]));
                 if (!$d || $d->format('Y-m-d') !== trim((string) $in[$f])) {
                     $errors[$f] = 'Must use YYYY-MM-DD format.';
+                } elseif (trim((string) $in[$f]) <= date('Y-m-d')) {
+                    $errors[$f] = 'Date must be a future date.';
                 }
             }
+        }
+        if (isset($in['posted_date'], $in['closing_date'])
+            && trim((string) $in['posted_date']) !== ''
+            && trim((string) $in['closing_date']) !== ''
+            && trim((string) $in['closing_date']) <= trim((string) $in['posted_date'])) {
+            $errors['closing_date'] = 'Closing date must be later than the posting date.';
         }
         if (isset($in['status']) && !in_array(strtolower((string) $in['status']), self::JOB_STATUSES, true)) {
             $errors['status'] = 'Must be one of: draft, open, closed, filled.';
@@ -281,7 +289,20 @@ class JobsController
                 $d = DateTime::createFromFormat('Y-m-d', trim((string) $in[$f]));
                 if (!$d || $d->format('Y-m-d') !== trim((string) $in[$f])) {
                     $errors[$f] = 'Must use YYYY-MM-DD format.';
+                } elseif (trim((string) $in[$f]) <= date('Y-m-d')) {
+                    $errors[$f] = 'Date must be a future date.';
                 }
+            }
+        }
+        if (!$errors
+            && (array_key_exists('posted_date', $in) || array_key_exists('closing_date', $in))) {
+            $cur = db()->prepare('SELECT posted_date, closing_date FROM job_postings WHERE id = :id');
+            $cur->execute([':id' => $id]);
+            $row = $cur->fetch();
+            $posted = array_key_exists('posted_date', $in) ? trim((string) $in['posted_date']) : (string) ($row['posted_date'] ?? '');
+            $closing = array_key_exists('closing_date', $in) ? trim((string) $in['closing_date']) : (string) ($row['closing_date'] ?? '');
+            if ($posted !== '' && $closing !== '' && $closing <= $posted) {
+                $errors['closing_date'] = 'Closing date must be later than the posting date.';
             }
         }
         if (array_key_exists('vacancies', $in) && filter_var($in['vacancies'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]) === false) {

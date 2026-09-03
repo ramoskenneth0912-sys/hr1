@@ -8,21 +8,63 @@ if (!$id) {
     redirect(BASE_URL . '/modules/hcm/index.php');
 }
 
+$errors = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
+
+    $firstName = trim((string) ($_POST['first_name'] ?? ''));
+    $lastName = trim((string) ($_POST['last_name'] ?? ''));
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    $jobTitle = trim((string) ($_POST['job_title'] ?? ''));
+    $hireDate = trim((string) ($_POST['hire_date'] ?? ''));
+
+    if ($firstName === '') {
+        $errors[] = 'First name is required.';
+    }
+    if ($lastName === '') {
+        $errors[] = 'Last name is required.';
+    }
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email address is required.';
+    }
+    if ($jobTitle === '') {
+        $errors[] = 'Job title is required.';
+    }
+    if ($hireDate === '') {
+        $errors[] = 'Hire date is required.';
+    }
+
+    if ($errors) {
+        $stmt = db()->prepare('SELECT * FROM employees WHERE id = ?');
+        $stmt->execute([$id]);
+        $employee = $stmt->fetch();
+        if (!$employee) {
+            flash('danger', 'Employee not found.');
+            redirect(BASE_URL . '/modules/hcm/index.php');
+        }
+        foreach (['first_name', 'last_name', 'email', 'phone', 'department_id',
+            'job_title', 'employment_type', 'hire_date', 'salary', 'status'] as $k) {
+            if (array_key_exists($k, $_POST)) {
+                $employee[$k] = $_POST[$k];
+            }
+        }
+        goto renderEmployeeEdit;
+    }
+
     $stmt = db()->prepare(
         'UPDATE employees SET first_name=?, last_name=?, email=?, phone=?, department_id=?,
          job_title=?, employment_type=?, hire_date=?, status=?, salary=? WHERE id=?'
     );
     $stmt->execute([
-        trim($_POST['first_name']),
-        trim($_POST['last_name']),
-        trim($_POST['email']),
+        $firstName,
+        $lastName,
+        $email,
         trim($_POST['phone'] ?? ''),
         $_POST['department_id'] ?: null,
-        trim($_POST['job_title']),
+        $jobTitle,
         $_POST['employment_type'],
-        $_POST['hire_date'],
+        $hireDate,
         $_POST['status'],
         $_POST['salary'] !== '' ? (float) $_POST['salary'] : null,
         $id,
@@ -31,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect(BASE_URL . '/modules/hcm/view.php?id=' . $id);
 }
 
+renderEmployeeEdit:
 $stmt = db()->prepare('SELECT * FROM employees WHERE id = ?');
 $stmt->execute([$id]);
 $employee = $stmt->fetch();
@@ -49,6 +92,16 @@ require_once __DIR__ . '/../../includes/header.php';
     <h1 class="page-title">Edit Employee</h1>
     <a href="view.php?id=<?= $id ?>" class="btn btn-outline">← Back</a>
 </div>
+
+<?php if ($errors): ?>
+<div class="alert alert-danger" style="margin-bottom:1rem;">
+    <ul style="margin:0;padding-left:1.25rem;">
+        <?php foreach ($errors as $err): ?>
+        <li><?= e($err) ?></li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php endif; ?>
 
 <form method="post" class="form-panel fade-in-up" style="animation-delay:.1s">
     <?= csrf_field() ?>

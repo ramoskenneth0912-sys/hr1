@@ -2,6 +2,7 @@
 $pageTitle = 'Edit User Account';
 $currentModule = 'users';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/security_log.php';
 requireHRorManager();
 requireNotApplicant();
 
@@ -10,10 +11,16 @@ if (!$user_id) {
     redirect(BASE_URL . '/modules/users/index.php');
 }
 
-$departments = getDepartments();
 $errors = [];
 
-$stmt = db()->prepare("SELECT u.*, e.first_name, e.last_name, e.employee_no, e.phone, e.job_title, e.department_id, e.status AS employee_status FROM users u LEFT JOIN employees e ON u.employee_id = e.id WHERE u.id = ?");
+$stmt = db()->prepare(
+    "SELECT u.*, e.first_name, e.last_name, e.employee_no, e.job_title,
+            d.name AS department_name
+     FROM users u
+     LEFT JOIN employees e ON u.employee_id = e.id
+     LEFT JOIN departments d ON e.department_id = d.id
+     WHERE u.id = ?"
+);
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
@@ -23,77 +30,73 @@ if (!$user) {
 }
 
 $old = [
-    'first_name' => $user['first_name'] ?? '',
-    'last_name' => $user['last_name'] ?? '',
-    'email' => $user['email'] ?? '',
-    'job_title' => $user['job_title'] ?? '',
-    'department_id' => $user['department_id'] ?? '',
-    'phone' => $user['phone'] ?? '',
+    'username' => $user['username'],
+    'email' => $user['email'],
     'role' => $user['role'] ?? 'employee',
-    'employee_status' => $user['employee_status'] ?? 'active',
+    'is_active' => (int) ($user['is_active'] ?? 1),
 ];
+
+$selfAccount = (int) ($user['id'] ?? 0) === (int) ($_SESSION['user_id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
-    $old['first_name'] = trim($_POST['first_name'] ?? '');
-    $old['last_name'] = trim($_POST['last_name'] ?? '');
-    $old['email'] = trim($_POST['email'] ?? '');
+    $old['username'] = trim($_POST['username'] ?? '');
+    $old['email'] = strtolower(trim($_POST['email'] ?? ''));
     $password = $_POST['password'] ?? '';
-    $old['job_title'] = trim($_POST['job_title'] ?? '');
-    $old['department_id'] = $_POST['department_id'] ?? '';
-    $old['phone'] = trim($_POST['phone'] ?? '');
     $old['role'] = $_POST['role'] ?? 'employee';
-    $old['employee_status'] = $_POST['employee_status'] ?? 'active';
+    if ($selfAccount) {
+        // Disabled select is not submitted; preserve current status for your own account.
+        $old['is_active'] = (int) ($user['is_active'] ?? 1);
+    } else {
+        $old['is_active'] = (isset($_POST['is_active']) && (int) $_POST['is_active'] === 1) ? 1 : 0;
+    }
 
-    if ($old['first_name'] === '') $errors[] = 'First name is required.';
-    if ($old['last_name'] === '') $errors[] = 'Last name is required.';
+    if ($old['username'] === '') $errors[] = 'Username is required.';
     if ($old['email'] === '') $errors[] = 'Email is required.';
     if (!filter_var($old['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
     if (!in_array($old['role'], ['hr', 'manager', 'employee'])) $errors[] = 'Invalid role.';
     if ($password !== '' && strlen($password) < 6) $errors[] = 'Password must be at least 6 characters.';
 
+    // Never allow disabling or locking yourself out.
+    if ($selfAccount && $old['is_active'] === 0) {
+        $errors[] = 'You cannot deactivate your own account.';
+    }
+
+    if ($old['username'] !== $user['username']) {
+        $stmt = db()->prepare("SELECT id FROM users WHERE username = ? AND id != ?");
+        $stmt->execute([$old['username'], $user_id]);
+        if ($stmt->fetch()) $errors[] = 'A user with this username already exists.';
+    }
+
     if ($old['email'] !== $user['email']) {
         $stmt = db()->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
         $stmt->execute([$old['email'], $user_id]);
-        if ($stmt->fetch()) {
-            $errors[] = 'A user with this email already exists.';
-        }
+        if ($stmt->fetch()) $errors[] = 'A user with this email already exists.';
     }
 
     if (empty($errors)) {
-        $validStatuses = ['active', 'on_leave', 'terminated', 'resigned'];
-        $empStatus = in_array($old['employee_status'], $validStatuses) ? $old['employee_status'] : 'active';
-
-        $stmt = db()->prepare("UPDATE employees SET first_name=?, last_name=?, email=?, phone=?, job_title=?, department_id=?, status=? WHERE id=?");
-        $stmt->execute([
-            $old['first_name'],
-            $old['last_name'],
-            $old['email'],
-            $old['phone'],
-            $old['job_title'],
-            $old['department_id'] ?: null,
-            $empStatus,
-            $user['employee_id'],
-        ]);
-
         if ($password !== '') {
-            $stmt = db()->prepare("UPDATE users SET email=?, role=?, password_hash=?, is_active=? WHERE id=?");
+            $stmt = db()->prepare("UPDATE users SET username=?, email=?, role=?, is_active=?, password_hash=? WHERE id=?");
             $stmt->execute([
+                $old['username'],
                 $old['email'],
                 $old['role'],
+                $old['is_active'],
                 password_hash($password, PASSWORD_DEFAULT),
-                $empStatus === 'active' ? 1 : 0,
                 $user_id,
             ]);
         } else {
-            $stmt = db()->prepare("UPDATE users SET email=?, role=?, is_active=? WHERE id=?");
+            $stmt = db()->prepare("UPDATE users SET username=?, email=?, role=?, is_active=? WHERE id=?");
             $stmt->execute([
+                $old['username'],
                 $old['email'],
                 $old['role'],
-                $empStatus === 'active' ? 1 : 0,
+                $old['is_active'],
                 $user_id,
             ]);
         }
+
+        securityLog('user_account_updated', "user_id={$user_id} role={$old['role']} active={$old['is_active']}", (int) ($_SESSION['user_id'] ?? 0));
 
         flash('success', 'User account updated successfully.');
         redirect(BASE_URL . '/modules/users/index.php');
@@ -107,7 +110,7 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="page-header fade-in-up">
     <div>
         <h1 class="page-title">Edit User Account</h1>
-        <p class="page-subtitle">Update account for <?= e($user['username']) ?></p>
+        <p class="page-subtitle">Manage system access for <?= e($user['username']) ?></p>
     </div>
     <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">← Back</a>
 </div>
@@ -124,47 +127,24 @@ require_once __DIR__ . '/../../includes/header.php';
     <?= csrf_field() ?>
     <div class="form-grid">
         <div class="form-group">
-            <label>Username</label>
-            <input type="text" value="<?= e($user['username']) ?>" disabled>
-        </div>
-        <div class="form-group">
-            <label>Employee No.</label>
-            <input type="text" value="<?= e($user['employee_no'] ?? '—') ?>" disabled>
-        </div>
-        <div class="form-group">
-            <label for="first_name">First Name *</label>
-            <input type="text" id="first_name" name="first_name" value="<?= e($old['first_name']) ?>" required>
-        </div>
-        <div class="form-group">
-            <label for="last_name">Last Name *</label>
-            <input type="text" id="last_name" name="last_name" value="<?= e($old['last_name']) ?>" required>
+            <label for="username">Username *</label>
+            <input type="text" id="username" name="username" value="<?= e($old['username']) ?>" required>
         </div>
         <div class="form-group">
             <label for="email">Email *</label>
             <input type="email" id="email" name="email" value="<?= e($old['email']) ?>" required>
         </div>
         <div class="form-group">
+            <label>Linked Employee</label>
+            <?php if (!empty($user['first_name'])): ?>
+                <input type="text" value="<?= e($user['employee_no'] . ' — ' . $user['first_name'] . ' ' . $user['last_name'] . ($user['job_title'] ? ' (' . $user['job_title'] . ')' : '')) ?>" disabled>
+            <?php else: ?>
+                <input type="text" value="— No linked employee —" disabled>
+            <?php endif; ?>
+        </div>
+        <div class="form-group">
             <label for="password">Password</label>
             <input type="password" id="password" name="password" minlength="6" placeholder="Leave blank to keep current">
-        </div>
-        <div class="form-group">
-            <label for="job_title">Position</label>
-            <input type="text" id="job_title" name="job_title" value="<?= e($old['job_title']) ?>">
-        </div>
-        <div class="form-group">
-            <label for="department_id">Department</label>
-            <select id="department_id" name="department_id">
-                <option value="">— Select —</option>
-                <?php foreach ($departments as $dept): ?>
-                    <option value="<?= (int) $dept['id'] ?>" <?= ($old['department_id'] == $dept['id']) ? 'selected' : '' ?>>
-                        <?= e($dept['name']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="form-group">
-            <label for="phone">Contact Number</label>
-            <input type="text" id="phone" name="phone" value="<?= e($old['phone']) ?>">
         </div>
         <div class="form-group">
             <label for="role">Role *</label>
@@ -175,12 +155,14 @@ require_once __DIR__ . '/../../includes/header.php';
             </select>
         </div>
         <div class="form-group">
-            <label for="employee_status">Employee Status</label>
-            <select id="employee_status" name="employee_status">
-                <?php foreach (['active','on_leave','terminated','resigned'] as $s): ?>
-                    <option value="<?= $s ?>" <?= ($old['employee_status'] === $s) ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $s)) ?></option>
-                <?php endforeach; ?>
+            <label for="is_active">Account Status</label>
+            <select id="is_active" name="is_active" <?= $selfAccount ? 'disabled' : '' ?>>
+                <option value="1" <?= $old['is_active'] === 1 ? 'selected' : '' ?>>Active</option>
+                <option value="0" <?= $old['is_active'] === 0 ? 'selected' : '' ?>>Inactive</option>
             </select>
+            <?php if ($selfAccount): ?>
+                <p class="field-hint" style="font-size:.8rem;color:var(--muted);margin-top:.25rem;">You cannot deactivate your own account.</p>
+            <?php endif; ?>
         </div>
     </div>
     <div class="form-actions">

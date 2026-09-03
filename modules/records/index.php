@@ -1,54 +1,36 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../../includes/auth.php';
 requireHRorManager();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_require();
-    $action = $_POST['action'] ?? '';
-
-    if ($action === 'add_document') {
-        db()->prepare(
-            'INSERT INTO employee_documents (employee_id, document_type, document_name, issue_date, expiry_date, notes)
-             VALUES (?,?,?,?,?,?)'
-        )->execute([
-            (int) $_POST['employee_id'],
-            $_POST['document_type'],
-            trim($_POST['document_name']),
-            $_POST['issue_date'] ?: null,
-            $_POST['expiry_date'] ?: null,
-            trim($_POST['notes'] ?? ''),
-        ]);
-        flash('success', 'Document record added.');
-        redirect(BASE_URL . '/modules/records/index.php?employee_id=' . (int) $_POST['employee_id']);
-    }
-
-    if ($action === 'add_history') {
-        db()->prepare(
-            'INSERT INTO employment_history (employee_id, event_type, event_date, description, recorded_by)
-             VALUES (?,?,?,?,?)'
-        )->execute([
-            (int) $_POST['employee_id'],
-            $_POST['event_type'],
-            $_POST['event_date'],
-            trim($_POST['description']),
-            trim($_POST['recorded_by'] ?? 'HR Admin'),
-        ]);
-        flash('success', 'Employment history recorded.');
-        redirect(BASE_URL . '/modules/records/index.php?employee_id=' . (int) $_POST['employee_id']);
-    }
-}
-
-$pageTitle = 'Employee Records Management';
+$pageTitle = 'Employee Records';
 $currentModule = 'records';
 require_once __DIR__ . '/../../includes/header.php';
 
 $employees = getEmployees(false);
-$selectedEmployeeId = (int) ($_GET['employee_id'] ?? ($employees[0]['id'] ?? 0));
+
+/*
+ * Resolve the selected employee safely. We never trust a raw employee_id from
+ * the URL; the id is only accepted if it matches an actual employee HR/Admin
+ * is authorized to view (the whole page is gated by requireHRorManager()).
+ * An absent / unknown id simply means "no selection" and shows no records.
+ */
+$selectedEmployee = null;
+if (isset($_GET['employee_id'])) {
+    $wanted = (int) $_GET['employee_id'];
+    foreach ($employees as $emp) {
+        if ((int) $emp['id'] === $wanted) {
+            $selectedEmployee = $emp;
+            break;
+        }
+    }
+}
+$selectedEmployeeId = $selectedEmployee['id'] ?? 0;
 
 $documents = [];
 $history = [];
 
 if ($selectedEmployeeId) {
+    // Existing document and lifecycle records for the selected employee.
     $stmt = db()->prepare(
         'SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY uploaded_at DESC'
     );
@@ -60,136 +42,209 @@ if ($selectedEmployeeId) {
     );
     $stmt->execute([$selectedEmployeeId]);
     $history = $stmt->fetchAll();
+
+    // Onboarding assignments for the selected employee (read-only reuse — no
+    // duplicate tables, no manual re-entry). Completed onboarding work is
+    // reflected here automatically so HR/Admin never re-enters it into Records.
+    $stmt = db()->prepare(
+        'SELECT eo.task_id, eo.status, eo.completed_date, eo.completed_by, eo.notes,
+                ot.task_name, ot.category, ot.sort_order, ot.is_required
+         FROM employee_onboarding eo
+         JOIN onboarding_tasks ot ON eo.task_id = ot.id
+         WHERE eo.employee_id = ?
+         ORDER BY ot.sort_order'
+    );
+    $stmt->execute([$selectedEmployeeId]);
+    $onboarding = $stmt->fetchAll();
+
+    // Merge: completed documentation requirements surface as documents,
+    // unless a matching document record already exists for the employee.
+    $existingDocNames = [];
+    foreach ($documents as $d) {
+        $existingDocNames[strtolower(trim($d['document_name'] ?? ''))] = true;
+    }
+    $docTypeLabel = [
+        'documentation' => 'Documentation',
+        'orientation'   => 'Orientation',
+        'training'      => 'Training',
+        'equipment'     => 'Equipment',
+        'compliance'    => 'Compliance',
+    ];
+    foreach ($onboarding as $o) {
+        if ($o['category'] !== 'documentation' || $o['status'] !== 'completed') {
+            continue;
+        }
+        if (isset($existingDocNames[strtolower(trim($o['task_name']))])) {
+            continue; // already on file as an explicit document record
+        }
+        $documents[] = [
+            'doc_from_onboarding' => true,
+            'document_name'       => $o['task_name'],
+            'document_type'       => $docTypeLabel[$o['category']] ?? ucfirst($o['category']),
+            'issue_date'          => $o['completed_date'],
+            'expiry_date'         => null,
+            'notes'               => $o['notes'] ?? '',
+            'doc_status'          => 'Completed',
+            'updated_date'        => $o['completed_date'],
+        ];
+    }
+
+    // Merge: completed onboarding lifecycle milestones surface as employment
+    // history events (orientation, training, equipment, compliance), unless an
+    // equivalent lifecycle event already exists for the employee.
+    $existingHistTypes = [];
+    foreach ($history as $h) {
+        $existingHistTypes[strtolower(trim($h['description'] ?? ''))] = true;
+    }
+    $eventTypeLabel = [
+        'orientation' => 'Orientation',
+        'training'    => 'Training',
+        'equipment'   => 'Equipment',
+        'compliance'  => 'Compliance',
+    ];
+    foreach ($onboarding as $o) {
+        if ($o['category'] === 'documentation' || $o['status'] !== 'completed') {
+            continue;
+        }
+        $desc = $o['task_name'];
+        if (isset($existingHistTypes[strtolower(trim($desc))])) {
+            continue; // already recorded as a lifecycle event
+        }
+        $history[] = [
+            'hist_from_onboarding' => true,
+            'event_type'           => $eventTypeLabel[$o['category']] ?? ucfirst($o['category']),
+            'event_date'           => $o['completed_date'],
+            'description'          => $desc,
+            'recorded_by'          => $o['completed_by'] ?: 'Onboarding',
+        ];
+    }
+}
+
+/*
+ * Normalize a row for display in the Documents table.
+ */
+function recordDocRow(array $r): array
+{
+    if (!empty($r['doc_from_onboarding'])) {
+        return [
+            'name'      => $r['document_name'],
+            'type'      => $r['document_type'],
+            'date'      => $r['issue_date'],
+            'expiry'    => null,
+            'notes'     => $r['notes'],
+            'status'    => $r['doc_status'],
+            'updated'   => $r['updated_date'],
+        ];
+    }
+    return [
+        'name'      => $r['document_name'],
+        'type'      => ucfirst($r['document_type']),
+        'date'      => $r['issue_date'],
+        'expiry'    => $r['expiry_date'],
+        'notes'     => $r['notes'] ?? '',
+        'status'    => 'On File',
+        'updated'   => $r['uploaded_at'] ?? null,
+    ];
 }
 ?>
 
 <div class="page-header fade-in-up">
     <div>
-        <h1 class="page-title">Employee Records Management</h1>
-        <p class="page-subtitle">Module 6 — Documents and employment history</p>
+        <h1 class="page-title">Employee Records</h1>
+        <p class="page-subtitle">Documents and employment history</p>
     </div>
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
+    <h2>Select Employee</h2>
     <form method="get" class="inline-form">
-        <label for="employee_id">Select Employee:</label>
+        <label for="employee_id">Employee:</label>
         <select id="employee_id" name="employee_id" onchange="this.form.submit()">
+            <option value="">Select an Employee</option>
             <?php foreach ($employees as $emp): ?>
             <option value="<?= (int) $emp['id'] ?>" <?= $selectedEmployeeId === (int) $emp['id'] ? 'selected' : '' ?>>
-                <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
+                <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?> — <?= e($emp['job_title']) ?>
             </option>
             <?php endforeach; ?>
         </select>
     </form>
 </section>
 
-<div class="two-col">
+<?php if (!$selectedEmployeeId): ?>
     <section class="panel fade-in-up" style="animation-delay:.2s">
-        <h2>Add Document Record</h2>
-        <form method="post" class="form-panel compact-form">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="add_document">
-            <input type="hidden" name="employee_id" value="<?= $selectedEmployeeId ?>">
-            <div class="form-group">
-                <label for="document_type">Document Type</label>
-                <select id="document_type" name="document_type" required>
-                    <?php foreach (['contract','id','certificate','evaluation','disciplinary','other'] as $t): ?>
-                    <option value="<?= $t ?>"><?= ucfirst($t) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="document_name">Document Name *</label>
-                <input type="text" id="document_name" name="document_name" required>
-            </div>
-            <div class="form-group">
-                <label for="issue_date">Issue Date</label>
-                <input type="date" id="issue_date" name="issue_date">
-            </div>
-            <div class="form-group">
-                <label for="expiry_date">Expiry Date</label>
-                <input type="date" id="expiry_date" name="expiry_date">
-            </div>
-            <div class="form-group">
-                <label for="notes">Notes</label>
-                <textarea id="notes" name="notes" rows="2"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Add Document</button>
-        </form>
+        <p class="empty">Select an employee to view their records.</p>
     </section>
+<?php endif; ?>
 
-    <section class="panel fade-in-up" style="animation-delay:.3s">
-        <h2>Add Employment Event</h2>
-        <form method="post" class="form-panel compact-form">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="add_history">
-            <input type="hidden" name="employee_id" value="<?= $selectedEmployeeId ?>">
-            <div class="form-group">
-                <label for="event_type">Event Type</label>
-                <select id="event_type" name="event_type" required>
-                    <?php foreach (['hire','promotion','transfer','salary_change','disciplinary','termination','resignation'] as $t): ?>
-                    <option value="<?= $t ?>"><?= ucfirst(str_replace('_', ' ', $t)) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="event_date">Event Date *</label>
-                <input type="date" id="event_date" name="event_date" value="<?= date('Y-m-d') ?>" required>
-            </div>
-            <div class="form-group">
-                <label for="description">Description *</label>
-                <textarea id="description" name="description" rows="3" required></textarea>
-            </div>
-            <div class="form-group">
-                <label for="recorded_by">Recorded By</label>
-                <input type="text" id="recorded_by" name="recorded_by" value="HR Admin">
-            </div>
-            <button type="submit" class="btn btn-primary">Record Event</button>
-        </form>
-    </section>
-</div>
+<?php if ($selectedEmployeeId && $selectedEmployee): ?>
+<section class="panel fade-in-up" style="animation-delay:.2s">
+    <h2>Employee</h2>
+    <p>
+        <strong><?= e($selectedEmployee['first_name'] . ' ' . $selectedEmployee['last_name']) ?></strong><br>
+        <?= e($selectedEmployee['employee_no']) ?><br>
+        <?= e($selectedEmployee['job_title']) ?>
+    </p>
+</section>
 
-<section class="panel fade-in-up" style="animation-delay:.4s">
+<section class="panel fade-in-up" style="animation-delay:.3s">
     <h2>Documents</h2>
     <table class="data-table">
         <thead>
-            <tr><th>Type</th><th>Name</th><th>Issue Date</th><th>Expiry</th><th>Notes</th></tr>
+            <tr>
+                <th>Document Name</th>
+                <th>Document Type</th>
+                <th>Issue/Submission Date</th>
+                <th>Expiry Date</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Notes</th>
+            </tr>
         </thead>
         <tbody>
             <?php if (empty($documents)): ?>
-            <tr><td colspan="5" class="empty">No documents on file.</td></tr>
-            <?php else: foreach ($documents as $doc): ?>
-            <tr>
-                <td><?= e(ucfirst($doc['document_type'])) ?></td>
-                <td><?= e($doc['document_name']) ?></td>
-                <td><?= formatDate($doc['issue_date']) ?></td>
-                <td><?= formatDate($doc['expiry_date']) ?></td>
-                <td><?= e($doc['notes'] ?: '—') ?></td>
-            </tr>
-            <?php endforeach; endif; ?>
+            <tr><td colspan="7" class="empty">No documents recorded for this employee.</td></tr>
+            <?php else: ?>
+                <?php foreach ($documents as $r): $d = recordDocRow($r); ?>
+                <tr>
+                    <td><?= e($d['name']) ?></td>
+                    <td><?= e($d['type']) ?></td>
+                    <td><?= formatDate($d['date']) ?></td>
+                    <td><?= formatDate($d['expiry']) ?></td>
+                    <td><?= $d['status'] === 'On File' ? e('On File') : statusBadge(strtolower($d['status'])) ?></td>
+                    <td><?= $d['updated'] ? e(date('M d, Y', strtotime($d['updated']))) : '—' ?></td>
+                    <td><?= e($d['notes'] ?: '—') ?></td>
+                </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </tbody>
     </table>
 </section>
 
-<section class="panel fade-in-up" style="animation-delay:.5s">
+<section class="panel fade-in-up" style="animation-delay:.4s">
     <h2>Employment History</h2>
     <table class="data-table">
         <thead>
-            <tr><th>Date</th><th>Event</th><th>Description</th><th>Recorded By</th></tr>
+            <tr>
+                <th>Event Type</th>
+                <th>Event Date</th>
+                <th>Description</th>
+                <th>Recorded By</th>
+            </tr>
         </thead>
         <tbody>
             <?php if (empty($history)): ?>
-            <tr><td colspan="4" class="empty">No history records.</td></tr>
-            <?php else: foreach ($history as $h): ?>
+            <tr><td colspan="4" class="empty">No employment history recorded for this employee.</td></tr>
+            <?php else: foreach ($history as $r): ?>
             <tr>
-                <td><?= formatDate($h['event_date']) ?></td>
-                <td><?= e(ucfirst(str_replace('_', ' ', $h['event_type']))) ?></td>
-                <td><?= e($h['description']) ?></td>
-                <td><?= e($h['recorded_by'] ?? '—') ?></td>
+                <td><?= e(ucfirst(str_replace('_', ' ', $r['event_type']))) ?></td>
+                <td><?= formatDate($r['event_date']) ?></td>
+                <td><?= e($r['description']) ?></td>
+                <td><?= e($r['recorded_by'] ?? '—') ?></td>
             </tr>
             <?php endforeach; endif; ?>
         </tbody>
     </table>
 </section>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

@@ -150,5 +150,89 @@
     });
 })();
 </script>
+
+<!--
+Automatic real-time notification updates. Lightweight AJAX polling against
+the read-only notification_poll.php endpoint (session-scoped, owner-only).
+- Only updates when the content actually changes (fingerprint compare) so
+  the bell does not flicker and no duplicate items are appended.
+- Never reloads the page and never opens the dropdown by itself.
+- If the dropdown is already open it refreshes in place; if closed it only
+  updates the unread badge / head pill.
+-->
+<script>
+(function () {
+    var toggle = document.getElementById('notifToggle');
+    var dropdown = document.getElementById('notifDropdown');
+    if (!toggle || !dropdown || typeof fetch !== 'function') return;
+
+    var BASE = <?= json_encode(BASE_URL) ?>;
+    var INTERVAL = 20000; // 20 seconds
+    var lastKey = null;
+    var inFlight = false;
+
+    function badgeEl() {
+        var b = toggle.querySelector('.notif-badge');
+        if (!b) {
+            b = document.createElement('span');
+            b.className = 'notif-badge';
+            toggle.appendChild(b);
+        }
+        return b;
+    }
+
+    // Baseline unread count as rendered by the server on page load (-1 = none).
+    var baseline = badgeEl();
+    var seenCount = (baseline && /^\d+$/.test(baseline.textContent)) ? parseInt(baseline.textContent, 10) : -1;
+
+    function setBadge(count) {
+        var badge = badgeEl();
+        if (count > 0) {
+            badge.textContent = count > 9 ? '9+' : String(count);
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function poll() {
+        if (inFlight) return;
+        inFlight = true;
+        fetch(BASE + '/modules/employee/notification_poll.php', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            cache: 'no-store'
+        }).then(function (r) {
+            if (!r.ok) throw new Error('poll status ' + r.status);
+            return r.json();
+        }).then(function (data) {
+            var count = parseInt(data.count || 0, 10);
+            var key = count + '|' + (data.latest_id || 0) + '|' + (data.latest_ts || '');
+            if (key === lastKey) return; // nothing new since the last refresh
+            var isFirst = lastKey === null;
+            lastKey = key;
+            // On the very first poll, only touch the DOM if the unread count
+            // actually moved while the page was sitting open (avoids a
+            // redundant refresh when nothing changed after page load).
+            if (isFirst && count === seenCount) return;
+            seenCount = count;
+            setBadge(count);
+            // Replace the dropdown body in place. The dropdown element keeps
+            // its own hidden state, so a closed bell stays closed.
+            if (typeof data.html === 'string') {
+                dropdown.innerHTML = data.html;
+            }
+        }).catch(function () {
+            /* transient network/session error: try again next interval */
+        }).then(function () {
+            inFlight = false;
+        });
+    }
+
+    poll();
+    window.setInterval(poll, INTERVAL);
+})();
+</script>
 </body>
 </html>

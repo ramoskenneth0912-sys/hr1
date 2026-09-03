@@ -59,6 +59,7 @@ if (isHRorManager()) {
 } elseif (isApplicant()) {
     $navSections['MAIN'] = [
         ['id' => 'applicant-dashboard', 'label' => 'My Applications', 'url' => BASE_URL . '/modules/applicant/dashboard.php', 'icon' => 'grid'],
+        ['id' => 'applicant-exams', 'label' => 'My Examinations', 'url' => BASE_URL . '/modules/applicant/exams.php', 'icon' => 'checklist'],
     ];
     $navSections['JOBS'] = [
         ['id' => 'jobs', 'label' => 'Browse Jobs', 'url' => BASE_URL . '/public/jobs.php', 'icon' => 'briefcase'],
@@ -68,18 +69,11 @@ if (isHRorManager()) {
 $showSidebar = isLoggedIn() && (isHRorManager() || isEmployee() || isApplicant());
 
 // Notifications for the header bell — always scoped to the logged-in account.
-$notifCount = 0;
-$notifItems = [];
-if (isLoggedIn()) {
-    $notifCount = (int) db()->query(
-        'SELECT COUNT(*) FROM notifications WHERE user_id = ' . (int) $_SESSION['user_id'] . ' AND is_read = 0 AND dismissed_at IS NULL'
-    )->fetchColumn();
-    $notifStmt = db()->prepare(
-        'SELECT * FROM notifications WHERE user_id = ? AND dismissed_at IS NULL ORDER BY created_at DESC LIMIT 8'
-    );
-    $notifStmt->execute([$_SESSION['user_id']]);
-    $notifItems = $notifStmt->fetchAll();
-}
+// The dropdown body is rendered by the shared helper so that it stays
+// byte-for-byte identical to what the AJAX polling endpoint returns.
+$notifData = isLoggedIn() ? notification_data((int) $_SESSION['user_id']) : ['count' => 0, 'items' => []];
+$notifCount = (int) $notifData['count'];
+$notifItems = $notifData['items'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -153,42 +147,7 @@ if (isLoggedIn()) {
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                         <?php if ($notifCount > 0): ?><span class="notif-badge"><?= $notifCount > 9 ? '9+' : $notifCount ?></span><?php endif; ?>
                     </button>
-                    <div class="notif-dropdown" id="notifDropdown" hidden>
-                        <div class="notif-head">Notifications<?php if ($notifCount > 0): ?> <span class="notif-count-pill"><?= $notifCount ?> new</span><?php endif; ?></div>
-                        <?php if (empty($notifItems)): ?>
-                        <div class="notif-empty">No notifications yet.</div>
-                        <?php else: ?>
-                        <ul class="notif-list">
-                            <?php foreach ($notifItems as $n): ?>
-                            <li class="notif-item-row <?= $n['is_read'] ? '' : 'unread' ?>">
-                                <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_read.php" class="notif-item-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
-                                    <button type="submit" class="notif-item-btn">
-                                        <span class="notif-title"><?= e($n['title']) ?></span>
-                                        <span class="notif-msg"><?= e($n['message']) ?></span>
-                                        <span class="notif-time"><?= date('M j, Y g:i A', strtotime($n['created_at'])) ?></span>
-                                    </button>
-                                </form>
-                                <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_delete.php" class="notif-item-del">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="id" value="<?= (int) $n['id'] ?>">
-                                    <button type="submit" class="notif-del-btn" title="Remove from bell" aria-label="Remove from bell">&times;</button>
-                                </form>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
-                        <?php endif; ?>
-                        <?php if (isEmployee() || isHRorManager()): ?>
-                        <a class="notif-view-all" href="<?= BASE_URL ?>/modules/employee/notifications.php">View all notifications</a>
-                        <?php endif; ?>
-                        <?php if (!empty($notifItems)): ?>
-                        <form method="post" action="<?= BASE_URL ?>/modules/employee/notification_remove_all.php" class="notif-remove-all-form">
-                            <?= csrf_field() ?>
-                            <button type="submit" class="notif-remove-all" data-confirm-removeall>Remove All</button>
-                        </form>
-                        <?php endif; ?>
-                    </div>
+                    <div class="notif-dropdown" id="notifDropdown" hidden><?= notification_dropdown_html(isLoggedIn() ? (int) $_SESSION['user_id'] : null) ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if (isLoggedIn() && $currentUser): ?>

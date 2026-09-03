@@ -53,6 +53,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('danger', 'Phone number may contain digits, spaces, + - ( ) . and must be 7-20 characters.');
         redirect(BASE_URL . '/modules/employee/profile.php');
     }
+    if (($dobErr = validateDateOfBirth($_POST['birth_date'] ?? null)) !== null) {
+        flash('danger', $dobErr);
+        redirect(BASE_URL . '/modules/employee/profile.php');
+    }
 
     db()->prepare(
         'UPDATE employees SET first_name=?, last_name=?, email=?, phone=? WHERE id=?'
@@ -237,7 +241,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
                 <div class="form-group">
                     <label for="birth_date">Birth Date</label>
-                    <input type="date" id="birth_date" name="birth_date" value="<?= e($profile['birth_date'] ?? '') ?>">
+                    <input type="date" id="birth_date" name="birth_date" value="<?= e($profile['birth_date'] ?? '') ?>" max="<?= date('Y-m-d') ?>">
                 </div>
                 <div class="form-group">
                     <label for="marital_status">Marital Status</label>

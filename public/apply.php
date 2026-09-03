@@ -133,6 +133,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 webRateLimitRecord($applyKey);
 
+                // Applicant + application successfully created with their CV.
+                // Now tell every active HR/Admin account via the existing
+                // notification bell. Runs after the insert succeeds so a failed
+                // submission never produces a "New Applicant" notification.
+                $newApplicantId = (int) db()->lastInsertId();
+                notifyHRofNewApplicant($newApplicantId, $fullName, $job['title']);
+
                 redirect(BASE_URL . '/public/thank_you.php');
             } else {
                 $errors[] = 'Failed to upload file. Please try again.';

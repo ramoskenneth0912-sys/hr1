@@ -2,68 +2,81 @@
 $pageTitle = 'Create User Account';
 $currentModule = 'users';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/security_log.php';
 requireHRorManager();
 requireNotApplicant();
 
-$departments = getDepartments();
 $errors = [];
 $old = [];
+
+// Employees that are not yet linked to any user account (only active leaves).
+$unlinked = db()->query(
+    "SELECT e.id, e.employee_no, e.first_name, e.last_name, e.email, e.job_title,
+            d.name AS department_name
+     FROM employees e
+     LEFT JOIN departments d ON e.department_id = d.id
+     LEFT JOIN users u ON u.employee_id = e.id
+     WHERE u.id IS NULL AND e.status = 'active'
+     ORDER BY e.last_name, e.first_name"
+)->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
     $old = $_POST;
-    $first_name = trim($_POST['first_name'] ?? '');
-    $last_name = trim($_POST['last_name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
+    $employee_id = (int) ($_POST['employee_id'] ?? 0);
+    $username = trim($_POST['username'] ?? '');
+    $email = strtolower(trim($_POST['email'] ?? ''));
     $password = $_POST['password'] ?? '';
-    $job_title = trim($_POST['job_title'] ?? '');
-    $department_id = $_POST['department_id'] ?? '';
-    $phone = trim($_POST['phone'] ?? '');
     $role = $_POST['role'] ?? 'employee';
 
-    if ($first_name === '') $errors[] = 'First name is required.';
-    if ($last_name === '') $errors[] = 'Last name is required.';
+    if ($employee_id <= 0) $errors[] = 'Please select an employee to link.';
+    if ($username === '') $errors[] = 'Username is required.';
     if ($email === '') $errors[] = 'Email is required.';
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
     if ($password === '') $errors[] = 'Password is required.';
     if (strlen($password) < 6) $errors[] = 'Password must be at least 6 characters.';
     if (!in_array($role, ['hr', 'manager', 'employee'])) $errors[] = 'Invalid role.';
 
-    $stmt = db()->prepare("SELECT id FROM users WHERE email = :email");
-    $stmt->execute([':email' => $email]);
-    if ($stmt->fetch()) {
-        $errors[] = 'A user with this email already exists.';
+    if ($employee_id > 0) {
+        // Confirm the selected employee exists, is active, and is not already linked.
+        $stmt = db()->prepare(
+            "SELECT e.id FROM employees e
+             LEFT JOIN users u ON u.employee_id = e.id
+             WHERE e.id = ? AND e.status = 'active' AND u.id IS NULL"
+        );
+        $stmt->execute([$employee_id]);
+        if (!$stmt->fetch()) {
+            $errors[] = 'The selected employee is not available for account creation.';
+        }
     }
 
-    $stmt = db()->prepare("SELECT id FROM users WHERE username = :username");
-    $stmt->execute([':username' => $email]);
-    if ($stmt->fetch()) {
-        $errors[] = 'A user with this email already exists.';
+    if ($username !== '') {
+        $stmt = db()->prepare("SELECT id FROM users WHERE username = :username");
+        $stmt->execute([':username' => $username]);
+        if ($stmt->fetch()) $errors[] = 'A user with this username already exists.';
+    }
+
+    if ($email !== '') {
+        $stmt = db()->prepare("SELECT id FROM users WHERE email = :email");
+        $stmt->execute([':email' => $email]);
+        if ($stmt->fetch()) $errors[] = 'A user with this email already exists.';
     }
 
     if (empty($errors)) {
-        $employee_no = generateCode('EMP', 'employees', 'employee_no');
-
-        $stmt = db()->prepare("INSERT INTO employees (employee_no, first_name, last_name, email, phone, department_id, job_title, hire_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), 'active')");
+        $stmt = db()->prepare(
+            "INSERT INTO users (username, email, password_hash, role, employee_id, is_active)
+             VALUES (?, ?, ?, ?, ?, 1)"
+        );
         $stmt->execute([
-            $employee_no,
-            $first_name,
-            $last_name,
-            $email,
-            $phone,
-            $department_id ?: null,
-            $job_title,
-        ]);
-        $employee_id = db()->lastInsertId();
-
-        $stmt = db()->prepare("INSERT INTO users (username, email, password_hash, role, employee_id, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-        $stmt->execute([
-            $email,
+            $username,
             $email,
             password_hash($password, PASSWORD_DEFAULT),
             $role,
             $employee_id,
         ]);
+        $userId = (int) db()->lastInsertId();
+
+        securityLog('user_account_created', "user_id={$userId} employee_id={$employee_id} role={$role}", (int) ($_SESSION['user_id'] ?? 0));
 
         flash('success', 'User account created successfully.');
         redirect(BASE_URL . '/modules/users/index.php');
@@ -77,10 +90,24 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="page-header fade-in-up">
     <div>
         <h1 class="page-title">Create User Account</h1>
-        <p class="page-subtitle">Add a new employee account</p>
+        <p class="page-subtitle">Link an employee and grant system access</p>
     </div>
     <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">← Back</a>
 </div>
+
+<?php if (empty($unlinked)): ?>
+    <div class="panel fade-in-up" style="max-width:600px;animation-delay:.1s">
+        <div class="alert alert-info">
+            <p>There are no active employees available to link. All active employees already have a system account,
+            or there are no employee records yet.</p>
+        </div>
+        <p style="margin-top:1rem;">
+            <a href="<?= BASE_URL ?>/modules/hcm/index.php" class="btn btn-primary">Manage Employees</a>
+            <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">Back to Accounts</a>
+        </p>
+    </div>
+    <?php require_once __DIR__ . '/../../includes/footer.php'; exit; ?>
+<?php endif; ?>
 
 <?php if (!empty($errors)): ?>
     <div class="alert alert-danger">
@@ -94,39 +121,27 @@ require_once __DIR__ . '/../../includes/header.php';
     <?= csrf_field() ?>
     <div class="form-grid">
         <div class="form-group">
-            <label for="first_name">First Name *</label>
-            <input type="text" id="first_name" name="first_name" value="<?= e($old['first_name'] ?? '') ?>" required>
-        </div>
-        <div class="form-group">
-            <label for="last_name">Last Name *</label>
-            <input type="text" id="last_name" name="last_name" value="<?= e($old['last_name'] ?? '') ?>" required>
-        </div>
-        <div class="form-group">
-            <label for="email">Email / Username *</label>
-            <input type="email" id="email" name="email" value="<?= e($old['email'] ?? '') ?>" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password *</label>
-            <input type="password" id="password" name="password" required minlength="6">
-        </div>
-        <div class="form-group">
-            <label for="job_title">Position</label>
-            <input type="text" id="job_title" name="job_title" value="<?= e($old['job_title'] ?? '') ?>">
-        </div>
-        <div class="form-group">
-            <label for="department_id">Department</label>
-            <select id="department_id" name="department_id">
-                <option value="">— Select —</option>
-                <?php foreach ($departments as $dept): ?>
-                    <option value="<?= (int) $dept['id'] ?>" <?= (($old['department_id'] ?? '') == $dept['id']) ? 'selected' : '' ?>>
-                        <?= e($dept['name']) ?>
+            <label for="employee_id">Linked Employee *</label>
+            <select id="employee_id" name="employee_id" required>
+                <option value="">— Select Employee —</option>
+                <?php foreach ($unlinked as $emp): ?>
+                    <option value="<?= (int) $emp['id'] ?>" <?= ((int) ($old['employee_id'] ?? 0)) === (int) $emp['id'] ? 'selected' : '' ?>>
+                        <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name'] . ($emp['job_title'] ? ' (' . $emp['job_title'] . ')' : '')) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
         </div>
         <div class="form-group">
-            <label for="phone">Contact Number</label>
-            <input type="text" id="phone" name="phone" value="<?= e($old['phone'] ?? '') ?>">
+            <label for="username">Username *</label>
+            <input type="text" id="username" name="username" value="<?= e($old['username'] ?? '') ?>" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email *</label>
+            <input type="email" id="email" name="email" value="<?= e($old['email'] ?? '') ?>" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password *</label>
+            <input type="password" id="password" name="password" required minlength="6">
         </div>
         <div class="form-group">
             <label for="role">Role *</label>

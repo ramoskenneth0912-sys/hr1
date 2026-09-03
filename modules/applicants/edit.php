@@ -8,8 +8,51 @@ if (!$id) {
     redirect(BASE_URL . '/modules/applicants/index.php');
 }
 
+$errors = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
+
+    $errors = [];
+
+    $firstName = trim((string) ($_POST['first_name'] ?? ''));
+    $lastName = trim((string) ($_POST['last_name'] ?? ''));
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    $positionApplied = trim((string) ($_POST['position_applied'] ?? ''));
+    $appliedDate = trim((string) ($_POST['applied_date'] ?? ''));
+
+    if ($firstName === '') {
+        $errors[] = 'First name is required.';
+    }
+    if ($lastName === '') {
+        $errors[] = 'Last name is required.';
+    }
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email address is required.';
+    }
+    if ($positionApplied === '') {
+        $errors[] = 'Position applied is required.';
+    }
+    if ($appliedDate === '') {
+        $errors[] = 'Applied date is required.';
+    }
+
+    if ($errors) {
+        $stmt = db()->prepare('SELECT * FROM applicants WHERE id = ?');
+        $stmt->execute([$id]);
+        $applicant = $stmt->fetch();
+        if (!$applicant) {
+            flash('danger', 'Applicant not found.');
+            redirect(BASE_URL . '/modules/applicants/index.php');
+        }
+        foreach (['first_name', 'last_name', 'email', 'phone', 'position_applied',
+            'department_id', 'job_posting_id', 'status', 'applied_date', 'address', 'notes'] as $k) {
+            if (array_key_exists($k, $_POST)) {
+                $applicant[$k] = $_POST[$k];
+            }
+        }
+        goto renderEditForm;
+    }
 
     // Server-side whitelist — never trust the frontend to pick an arbitrary status.
     $newStatus = trim($_POST['status'] ?? '');
@@ -28,16 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          position_applied=?, department_id=?, job_posting_id=?, status=?, applied_date=?, notes=? WHERE id=?'
     );
     $stmt->execute([
-        trim($_POST['first_name']),
-        trim($_POST['last_name']),
-        trim($_POST['email']),
+        $firstName,
+        $lastName,
+        $email,
         trim($_POST['phone'] ?? ''),
         trim($_POST['address'] ?? ''),
-        trim($_POST['position_applied']),
+        $positionApplied,
         $_POST['department_id'] ?: null,
         $_POST['job_posting_id'] ?: null,
         $newStatus,
-        $_POST['applied_date'],
+        $appliedDate,
         trim($_POST['notes'] ?? ''),
         $id,
     ]);
@@ -58,20 +101,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    // Send the acceptance email when HR moves the applicant to an accepted stage,
-    // using the email already stored in the database. Guarded so it is sent at
-    // most once per applicant (prevents duplicate acceptance emails).
+    // Send the Online Examination email when HR moves the applicant to an
+    // accepted stage, using the email already stored in the database. Guarded
+    // so it is sent at most once per applicant (prevents duplicate emails).
     if (in_array($newStatus, ['accepted', 'passed_screening'], true)
         && empty($fresh['acceptance_email_sent_at'])) {
         require_once __DIR__ . '/../../includes/mail.php';
+        require_once __DIR__ . '/../../includes/exam.php';
         require_once __DIR__ . '/../../includes/security_log.php';
 
         $applicantName = trim($fresh['first_name'] . ' ' . $fresh['last_name']);
-        $sent = sendApplicationAcceptedEmail(
-            $fresh['email'],
-            $applicantName,
-            $fresh['position_applied']
-        );
+
+        // Ensure a secure, no-login exam access token exists (reuses the
+        // existing opaque token + pending-request mechanism).
+        $token = ensureApplicantExamToken((int) $id, (int) ($_SESSION['user_id'] ?? 0));
+        $sent = false;
+        if ($token !== null) {
+            $examAccessLink = (defined('BASE_URL') ? BASE_URL : '/HR1')
+                . '/modules/applicant/exam_access.php?token=' . urlencode($token);
+            $sent = sendApplicationAcceptedEmail(
+                $fresh['email'],
+                $applicantName,
+                $fresh['position_applied'],
+                $examAccessLink
+            );
+        }
 
         if ($sent) {
             db()->prepare('UPDATE applicants SET acceptance_email_sent_at = NOW() WHERE id = ?')
@@ -104,6 +158,7 @@ if (!$applicant) {
     redirect(BASE_URL . '/modules/applicants/index.php');
 }
 
+renderEditForm:
 $pageTitle = 'Edit Applicant';
 $currentModule = 'applicants';
 $departments = getDepartments();
@@ -115,6 +170,17 @@ require_once __DIR__ . '/../../includes/header.php';
     <h1 class="page-title">Edit Applicant</h1>
     <a href="view.php?id=<?= $id ?>" class="btn btn-outline">← Back</a>
 </div>
+
+<?php if (!empty($errors)): ?>
+<div class="alert alert-danger" style="margin-bottom:1rem;">
+    <ul style="margin:0;padding-left:1.25rem;">
+        <?php foreach ($errors as $err): ?>
+        <li><?= e($err) ?></li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php endif; ?>
+
 
 <form method="post" class="form-panel fade-in-up" style="animation-delay:.1s">
     <?= csrf_field() ?>

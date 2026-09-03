@@ -32,6 +32,9 @@ class ApiKeyAuth
         'users:read',
         'users:write',
         'departments:read',
+        'exams:read',
+        'exams:write',
+        'exams:results:write',
         'admin:read',
         'admin:write',
     ];

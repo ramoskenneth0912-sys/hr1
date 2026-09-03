@@ -1,7 +1,8 @@
 <?php
-$pageTitle = 'Delete User Account';
+$pageTitle = 'Deactivate User Account';
 $currentModule = 'users';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/security_log.php';
 requireHRorManager();
 requireNotApplicant();
 
@@ -10,7 +11,10 @@ if (!$user_id) {
     redirect(BASE_URL . '/modules/users/index.php');
 }
 
-$stmt = db()->prepare("SELECT u.*, e.first_name, e.last_name FROM users u LEFT JOIN employees e ON u.employee_id = e.id WHERE u.id = ?");
+$stmt = db()->prepare(
+    "SELECT u.*, e.first_name, e.last_name FROM users u
+     LEFT JOIN employees e ON u.employee_id = e.id WHERE u.id = ?"
+);
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
@@ -19,22 +23,22 @@ if (!$user) {
     redirect(BASE_URL . '/modules/users/index.php');
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_require();
-}
+$selfAccount = (int) $user['id'] === (int) ($_SESSION['user_id'] ?? 0);
+$alreadyInactive = ((int) ($user['is_active'] ?? 1)) === 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes') {
-    $employee_id = $user['employee_id'];
+    csrf_require();
 
-    $stmt = db()->prepare("DELETE FROM users WHERE id = ?");
-    $stmt->execute([$user_id]);
-
-    if ($employee_id) {
-        $stmt = db()->prepare("DELETE FROM employees WHERE id = ?");
-        $stmt->execute([$employee_id]);
+    if ($selfAccount) {
+        flash('danger', 'You cannot deactivate your own account.');
+        redirect(BASE_URL . '/modules/users/index.php');
     }
 
-    flash('success', 'User account deleted successfully.');
+    // Deactivate only the account — never delete the linked employee record.
+    db()->prepare("UPDATE users SET is_active = 0 WHERE id = ?")->execute([$user_id]);
+    securityLog('user_account_deactivated', "user_id={$user_id} username={$user['username']}", (int) ($_SESSION['user_id'] ?? 0));
+
+    flash('success', 'User account deactivated. The account will no longer be able to sign in.');
     redirect(BASE_URL . '/modules/users/index.php');
 }
 
@@ -44,26 +48,38 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="page-header fade-in-up">
     <div>
-        <h1 class="page-title">Delete User Account</h1>
-        <p class="page-subtitle">This action cannot be undone</p>
+        <h1 class="page-title">Deactivate User Account</h1>
+        <p class="page-subtitle">Revoke system access without deleting records</p>
     </div>
     <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">← Back</a>
 </div>
 
 <div class="panel fade-in-up" style="max-width:600px;animation-delay:.1s">
-    <div class="alert alert-danger">
-        <p>Are you sure you want to delete <strong><?= e($user['username']) ?></strong>?
-        This will permanently remove the user account<?php if ($user['first_name']): ?> and employee record for <?= e($user['first_name'] . ' ' . $user['last_name']) ?><?php endif; ?>.</p>
-    </div>
-
-    <form method="post" style="margin-top:1rem;">
-        <?= csrf_field() ?>
-        <input type="hidden" name="confirm" value="yes">
-        <div class="btn-group">
-            <button type="submit" class="btn btn-primary">Yes, Delete</button>
-            <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">Cancel</a>
+    <?php if ($alreadyInactive): ?>
+        <div class="alert alert-info">
+            <p>This account is already inactive.</p>
         </div>
-    </form>
+        <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">← Back</a>
+    <?php elseif ($selfAccount): ?>
+        <div class="alert alert-danger">
+            <p>You cannot deactivate your own account.</p>
+        </div>
+        <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">← Back</a>
+    <?php else: ?>
+        <div class="alert alert-danger">
+            <p>Deactivate the account for <strong><?= e($user['username']) ?></strong>?
+            The user will no longer be able to sign in. No employee or data records are deleted, and the account can be reactivated later.</p>
+        </div>
+
+        <form method="post" style="margin-top:1rem;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="confirm" value="yes">
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">Deactivate Account</button>
+                <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    <?php endif; ?>
 </div>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

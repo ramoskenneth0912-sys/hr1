@@ -90,6 +90,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             flash('danger', 'The new interview date is required.');
             redirect(BASE_URL . '/modules/applicants/interview_action.php?id=' . $id . '&action=reschedule');
         }
+        if (($err = validateFutureDate($newDate)) !== null) {
+            flash('danger', $err);
+            redirect(BASE_URL . '/modules/applicants/interview_action.php?id=' . $id . '&action=reschedule');
+        }
         if ($newTime !== '' && !preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $newTime)) {
             flash('danger', 'The new interview time is invalid.');
             redirect(BASE_URL . '/modules/applicants/interview_action.php?id=' . $id . '&action=reschedule');
@@ -190,7 +194,7 @@ $currentTimeVal = $row['interview_time'] ? substr($row['interview_time'], 0, 5) 
     <div class="form-grid">
         <div class="form-group">
             <label for="interview_date">New Interview Date *</label>
-            <input type="date" id="interview_date" name="interview_date" required>
+            <input type="date" id="interview_date" name="interview_date" required min="<?= date('Y-m-d') ?>">
         </div>
         <div class="form-group">
             <label for="interview_time">New Interview Time</label>

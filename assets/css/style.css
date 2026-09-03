@@ -95,29 +95,25 @@ a:hover { color: var(--purple-dark); }
     .fade-in-up { animation: none; opacity: 1; transform: none; }
 }
 
-/* ===== ENTRANCE ANIMATIONS ===== */
-@keyframes fadeSlideUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
+/* ===== PAGE ENTRANCE =====
+   Instant page transitions. Elements that used to fade/slide in (page
+   headers, panels, sections and data-table rows) now appear immediately.
+   No page-wide fade/slide/zoom entrance animation while navigating. */
 .fade-in-up {
-    opacity: 0;
-    animation: fadeSlideUp .5s ease-out forwards;
+    opacity: 1;
+    animation: none;
+    transform: none;
 }
 
-.panel.fade-in-up { animation-duration: .55s; }
+.panel.fade-in-up { animation: none; }
 
+/* Applicant-list and other data tables: rows appear immediately.
+   (Also neutralizes the global transition on this page entirely.) */
 .data-table tbody tr {
-    opacity: 0;
-    animation: fadeSlideUp .4s ease-out forwards;
+    opacity: 1;
+    animation: none;
+    transform: none;
 }
-.data-table tbody tr:nth-child(1) { animation-delay: .35s; }
-.data-table tbody tr:nth-child(2) { animation-delay: .42s; }
-.data-table tbody tr:nth-child(3) { animation-delay: .49s; }
-.data-table tbody tr:nth-child(4) { animation-delay: .56s; }
-.data-table tbody tr:nth-child(5) { animation-delay: .63s; }
-.data-table tbody tr:nth-child(n+6) { animation-delay: .7s; }
 
 /* ===== SIDEBAR ===== */
 .sidebar {

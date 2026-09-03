@@ -27,15 +27,43 @@ define('HR1_SENDMAIL_PATH', 'C:/xampp/sendmail/sendmail.exe');
  */
 function hr1Sendmail(string $toEmail, string $subject, string $body, array $extra = []): bool
 {
-    $headers = "To: {$toEmail}\r\n"
-        . "Subject: {$subject}\r\n"
-        . "From: " . ($extra['From'] ?? HR1_MAIL_FROM) . "\r\n"
-        . "Reply-To: " . ($extra['Reply-To'] ?? HR1_MAIL_FROM) . "\r\n"
-        . "X-Mailer: HR1-System/2.0\r\n"
-        . "MIME-Version: 1.0\r\n"
-        . "Content-Type: text/plain; charset=UTF-8\r\n";
+    $isHtml = !empty($extra['html']);
+    // When sending HTML, `body` holds the HTML. A plain-text fallback may be
+    // provided via $extra['text']; otherwise a minimal text strip is generated.
+    $htmlBody  = $isHtml ? $body : $body;
+    $textBody  = $isHtml ? (string) ($extra['text'] ?? '') : $body;
 
-    $message = $headers . "\r\n" . $body;
+    if ($isHtml) {
+        $boundary = 'HR1-' . bin2hex(random_bytes(8));
+        $headers = "To: {$toEmail}\r\n"
+            . "Subject: {$subject}\r\n"
+            . "From: " . ($extra['From'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "Reply-To: " . ($extra['Reply-To'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "X-Mailer: HR1-System/2.0\r\n"
+            . "MIME-Version: 1.0\r\n"
+            . "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
+
+        $message = $headers . "\r\n"
+            . "--{$boundary}\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($textBody !== '' ? $textBody : html_to_plain($htmlBody))) . "\r\n"
+            . "--{$boundary}\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: base64\r\n\r\n"
+            . chunk_split(base64_encode($htmlBody)) . "\r\n"
+            . "--{$boundary}--\r\n";
+    } else {
+        $headers = "To: {$toEmail}\r\n"
+            . "Subject: {$subject}\r\n"
+            . "From: " . ($extra['From'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "Reply-To: " . ($extra['Reply-To'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "X-Mailer: HR1-System/2.0\r\n"
+            . "MIME-Version: 1.0\r\n"
+            . "Content-Type: text/plain; charset=UTF-8\r\n";
+
+        $message = $headers . "\r\n" . $body;
+    }
 
     $descriptors = [
         0 => ['pipe', 'r'],
@@ -70,6 +98,17 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
     }
 
     return true;
+}
+
+/** Minimal HTML → plain-text conversion used only for multipart text fallback. */
+function html_to_plain(string $html): string
+{
+    $t = preg_replace('/<br\s*\/?>/i', "\n", $html);
+    $t = preg_replace('/<\/(p|div|h[1-6]|li|tr)>/i', "\n", $t);
+    $t = preg_replace('/<li[^>]*>/i', "- ", $t);
+    $t = preg_replace('/<a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/is', '$2 ($1)', $t);
+    $t = strip_tags($t);
+    return html_entity_decode(trim(preg_replace('/[ \t]+/', ' ', $t)), ENT_QUOTES, 'UTF-8');
 }
 
 /**
@@ -114,37 +153,186 @@ function sendResetApprovedToEmployee(string $toEmail, string $rawToken, string $
 }
 
 /**
- * Send the application-acceptance email to an applicant after HR moves their
+ * Send the "Online Examination" email to an applicant after HR moves their
  * application to "accepted" / "passed_screening".
+ *
+ * This is the applicant's DIRECT, no-login access point to the examination.
+ * It uses the EXACT required wording and a secure tokenized HR1 access link.
+ * The applicant does NOT have an HR1 applicant account, so no login is ever
+ * required and no login-required page is linked.
  *
  * Reuses the existing hr1Sendmail() SMTP relay — no separate mail system.
  *
- * @param string $toEmail     Applicant's email (from the applicants table)
+ * @param string $toEmail        Applicant's email (from the applicants table)
  * @param string $applicantName  Applicant display name for the greeting
- * @param string $position    The applied job position (used in subject & body)
+ * @param string $position       The applied job position (used in subject & body)
+ * @param string $examAccessLink The secure tokenized no-login HR1 exam access URL
  * @return bool  true if sendmail accepted the message
  */
-function sendApplicationAcceptedEmail(string $toEmail, string $applicantName, string $position): bool
+function sendApplicationAcceptedEmail(string $toEmail, string $applicantName, string $position, string $examAccessLink): bool
 {
     if ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false) {
         error_log('HR1 ACCEPTANCE EMAIL: skipped — invalid email address');
         return false;
     }
 
-    $subject = 'Application Update – ' . $position;
+    $subject = 'Online Examination – ' . $position;
+
+    $companyName = 'TRI-M Global Logistics & Trading Inc.';
+    $safeName = $applicantName !== '' ? $applicantName : 'Applicant';
+    $safeLink = htmlspecialchars($examAccessLink, ENT_QUOTES, 'UTF-8');
+
+    
+
+    $textBody = "Dear {$safeName},\n\n"
+        . "Congratulations! \n\n"
+        . "We are pleased to inform you that your application for the {$position} position at {$companyName}\n\n"
+        . "has been accepted and has progressed to the next stage of our recruitment process..\n\n"
+        . "As the next step, you are invited to take the Online Examination. Please access your examination using the link below::\n\n"
+        . "[Access Online Examination]\n"
+        . $examAccessLink . "\n\n"
+        . "Please complete the examination within the required period and follow the instructions provided on the examination page.\n\n"
+        . "Your examination result will be reviewed as part of the next stage of the recruitment process.\n\n"
+        . "Thank you for your time and interest in joining our organization.\n\n"
+        . "Human Resources\n\n"
+        . $companyName . "\n";
+
+    $htmlBody = "<!DOCTYPE html>\n<html><body style=\"margin:0;padding:0;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">\n"
+        . "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f6f8;padding:24px 0;\"><tr><td align=\"center\">\n"
+        . "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;\">\n"
+        . "<tr><td style=\"padding:28px 32px;\">\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Dear {$safeName},</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\"><strong>Congratulations! {$congratulationMessage}</strong></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Thank you for your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please access your examination using the link below:</p>\n"
+        . "<p style=\"margin:0 0 20px 0;text-align:center;\"><a href=\"{$safeLink}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;\">Access Online Examination</a></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please complete the examination within the required period and follow the instructions provided on the examination page.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Your examination result will be reviewed as part of the next stage of the recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 24px 0;font-size:15px;line-height:1.6;\">Thank you for your time and interest in joining our organization.</p>\n"
+        . "<p style=\"margin:0 0 4px 0;font-size:15px;line-height:1.6;\">Human Resources</p>\n"
+        . "<p style=\"margin:0;font-size:15px;line-height:1.6;\">{$companyName}</p>\n"
+        . "</td></tr></table>\n"
+        . "</td></tr></table>\n</body></html>\n";
+
+    $sent = hr1Sendmail($toEmail, $subject, $htmlBody, ['html' => true, 'text' => $textBody]);
+
+    if (!$sent) {
+        error_log('HR1 ACCEPTANCE EMAIL FAILED: to=' . $toEmail);
+    }
+
+    return $sent;
+}
+
+/**
+ * Send the "Exam Passed -> Final Interview" email to an applicant after HR1's
+ * server-side result engine determines ($passed === true) inside
+ * recordExamResult(). This is the single authoritative trigger.
+ *
+ * It does NOT select or hire the applicant and does NOT schedule the final
+ * interview; it only informs the applicant that they qualified and that HR
+ * will contact them with the interview schedule. The actual interview
+ * invitation (date/time/location) is sent later by the existing
+ * sendInterviewInvitationEmail() when HR schedules the final interview.
+ *
+ * @param string $toEmail     Applicant's registered email (from the database)
+ * @param string $applicantName Applicant display name
+ * @param string $position    The applied job position
+ * @return bool  true if sendmail accepted the message
+ */
+function sendExamPassedFinalInterviewEmail(string $toEmail, string $applicantName, string $position): bool
+{
+    if ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false) {
+        error_log('HR1 EXAM-PASSED EMAIL: skipped — invalid email address');
+        return false;
+    }
+
+    $subject = 'Congratulations! You Passed the Examination – Final Interview';
+
+    $companyName = 'TRI-M Global Logistics & Trading Inc.';
 
     $body = "Dear " . ($applicantName !== '' ? $applicantName : 'Applicant') . ",\n\n"
-        . "Thank you for applying for the " . $position . " position at TRI-M Global Logistics & Trading Inc.\n\n"
-        . "We are pleased to inform you that your application has passed the current stage of our recruitment process.\n\n"
-        . "Our HR team will contact you regarding the next step.\n\n"
+        . "Congratulations!\n\n"
+        . "We are pleased to inform you that you have successfully passed the online examination for the position of " . $position . ".\n\n"
+        . "You are now qualified to proceed to the Final Interview stage of our recruitment process.\n\n"
+        . "Please wait for the interview scheduling instructions from our HR Department. HR will contact you once your Final Interview has been scheduled.\n\n"
+        . "We look forward to speaking with you.\n\n"
         . "Best regards,\n\n"
-        . "Human Resources Department\n"
-        . "TRI-M Global Logistics & Trading Inc.\n";
+        . "HR Department\n"
+        . $companyName . "\n";
 
     $sent = hr1Sendmail($toEmail, $subject, $body);
 
     if (!$sent) {
-        error_log('HR1 ACCEPTANCE EMAIL FAILED: to=' . $toEmail);
+        error_log('HR1 EXAM-PASSED EMAIL FAILED: to=' . $toEmail);
+    }
+
+    return $sent;
+}
+
+/**
+ * Send the "Initial Screening → Online Examination" email to an applicant.
+ * This is the applicant's DIRECT access point for the examination. The
+ * applicant does NOT have an HR1 applicant account, so the email link is a
+ * tokenized, self-serve link — no login, no dashboard, no HR1 credentials.
+ *
+ * The link contains ONLY the assignment's opaque access_token (exm_...); it
+ * never exposes DB ids, applicant ids, API keys, passwords or HR3 details.
+ * The HR3 provider URL is never placed in this email — the applicant always
+ * enters via the secure HR1 tokenized access page.
+ *
+ * @param string $toEmail       Applicant's registered email (from applicants.email)
+ * @param string $applicantName Applicant display name
+ * @param string $position      The applied job position
+ * @param string $examLink      The tokenized HR1 exam access URL
+ * @return bool  true if sendmail accepted the message
+ */
+function sendExamAssignmentEmail(string $toEmail, string $applicantName, string $position, string $examLink): bool
+{
+    if ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false) {
+        error_log('HR1 EXAM ASSIGNMENT EMAIL: skipped — invalid email address');
+        return false;
+    }
+
+    $subject = 'Online Examination – ' . $position;
+
+    $companyName = 'TRI-M Global Logistics & Trading Inc.';
+    $safeName = $applicantName !== '' ? $applicantName : 'Applicant';
+    $safeLink = htmlspecialchars($examLink, ENT_QUOTES, 'UTF-8');
+
+    $textBody = "Dear {$safeName},\n\n"
+        . "Thank you for your application for the {$position} position at {$companyName}\n\n"
+        . "We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.\n\n"
+        . "Please access your examination using the link below:\n\n"
+        . "[Access Online Examination]\n"
+        . $examLink . "\n\n"
+        . "Please complete the examination within the required period and follow the instructions provided on the examination page.\n\n"
+        . "Your examination result will be reviewed as part of the next stage of the recruitment process.\n\n"
+        . "Thank you for your time and interest in joining our organization.\n\n"
+        . "Human Resources\n\n"
+        . $companyName . "\n";
+
+    $htmlBody = "<!DOCTYPE html>\n<html><body style=\"margin:0;padding:0;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\">\n"
+        . "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f6f8;padding:24px 0;\"><tr><td align=\"center\">\n"
+        . "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;\">\n"
+        . "<tr><td style=\"padding:28px 32px;\">\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Dear {$safeName},</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Thank you for your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please access your examination using the link below:</p>\n"
+        . "<p style=\"margin:0 0 20px 0;text-align:center;\"><a href=\"{$safeLink}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;\">Access Online Examination</a></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please complete the examination within the required period and follow the instructions provided on the examination page.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Your examination result will be reviewed as part of the next stage of the recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 24px 0;font-size:15px;line-height:1.6;\">Thank you for your time and interest in joining our organization.</p>\n"
+        . "<p style=\"margin:0 0 4px 0;font-size:15px;line-height:1.6;\">Human Resources</p>\n"
+        . "<p style=\"margin:0;font-size:15px;line-height:1.6;\">{$companyName}</p>\n"
+        . "</td></tr></table>\n"
+        . "</td></tr></table>\n</body></html>\n";
+
+    $sent = hr1Sendmail($toEmail, $subject, $htmlBody, ['html' => true, 'text' => $textBody]);
+
+    if (!$sent) {
+        error_log('HR1 EXAM ASSIGNMENT EMAIL FAILED: to=' . $toEmail);
     }
 
     return $sent;

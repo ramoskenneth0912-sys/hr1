@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 
-$sql = "SELECT u.*, e.first_name, e.last_name, e.employee_no, e.job_title, e.status AS employee_status,
+$sql = "SELECT u.*, e.first_name, e.last_name, e.employee_no,
         d.name AS department_name
         FROM users u
         LEFT JOIN employees e ON u.employee_id = e.id
@@ -31,14 +31,14 @@ $users = $stmt->fetchAll();
 <div class="page-header fade-in-up">
     <div>
         <h1 class="page-title">User Management</h1>
-        <p class="page-subtitle">Employee account management</p>
+        <p class="page-subtitle">System Account &amp; Access Management</p>
     </div>
     <a href="<?= BASE_URL ?>/modules/users/create.php" class="btn btn-primary">+ New Account</a>
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
     <form method="get" class="inline-form" style="margin-bottom: 1rem;">
-        <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search by name or username..." style="padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.875rem;font-family:inherit;flex:1;min-width:200px;">
+        <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search by username or employee name..." style="padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.875rem;font-family:inherit;flex:1;min-width:200px;">
         <button type="submit" class="btn btn-outline btn-sm">Search</button>
         <?php if ($search !== ''): ?>
             <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline btn-sm">Clear</a>
@@ -49,23 +49,29 @@ $users = $stmt->fetchAll();
         <thead>
             <tr>
                 <th>Username</th>
-                <th>Full Name</th>
-                <th>Email</th>
+                <th>Linked Employee</th>
                 <th>Role</th>
                 <th>Department</th>
-                <th>Status</th>
+                <th>Account Status</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($users)): ?>
-                <tr><td colspan="7" class="empty">No users found.</td></tr>
+                <tr><td colspan="6" class="empty">No users found.</td></tr>
             <?php else: ?>
                 <?php foreach ($users as $u): ?>
                     <tr>
                         <td><?= e($u['username']) ?></td>
-                        <td><?= e(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '')) ?></td>
-                        <td><?= e($u['email']) ?></td>
+                        <td>
+                            <?php if (!empty($u['first_name'])): ?>
+                                <a href="<?= BASE_URL ?>/modules/hcm/view.php?id=<?= (int) $u['employee_id'] ?>">
+                                    <?= e(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '')) ?>
+                                </a>
+                            <?php else: ?>
+                                <span style="color:var(--muted);">— No linked employee —</span>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php if ($u['role'] === 'hr'): ?>
                                 <span class="badge badge-primary">HR</span>
@@ -85,7 +91,7 @@ $users = $stmt->fetchAll();
                         </td>
                         <td class="actions">
                             <a href="<?= BASE_URL ?>/modules/users/edit.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm btn-outline">Edit</a>
-                            <a href="<?= BASE_URL ?>/modules/users/delete.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm" style="color:var(--danger);">Delete</a>
+                            <a href="<?= BASE_URL ?>/modules/users/delete.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm" style="color:var(--danger);">Deactivate</a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
