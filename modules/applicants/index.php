@@ -226,7 +226,7 @@ $filterQuery = http_build_query($qs);
         <p class="page-subtitle"></p>
     </div>
     <div class="btn-group">
-        <a href="<?= BASE_URL ?>/modules/applicants/exam_history.php" class="btn btn-outline">Exam History</a>
+        <a href="<?= BASE_URL ?>/modules/applicants/exam_history.php" class="btn btn-outline">Tracker</a>
         <a href="interview_history.php" class="btn btn-outline">Interview History</a>
     </div>
 </div>

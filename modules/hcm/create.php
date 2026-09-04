@@ -46,7 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = db()->prepare(
         'INSERT INTO employees (employee_no, first_name, last_name, email, phone, department_id,
-         job_title, employment_type, hire_date, status, salary) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+         job_title, employment_type, hire_date, status, salary, salary_type, pay_frequency, currency)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
     );
     $stmt->execute([
         $employeeNo,
@@ -60,6 +61,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hireDate,
         $_POST['status'] ?? 'active',
         $_POST['salary'] !== '' ? (float) $_POST['salary'] : null,
+        trim($_POST['salary_type'] ?? '') ?: null,
+        trim($_POST['pay_frequency'] ?? '') ?: null,
+        trim($_POST['currency'] ?? '') ?: 'PHP',
     ]);
 
     $employeeId = (int) db()->lastInsertId();
@@ -72,6 +76,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hireDate,
         'Employee hired as ' . $jobTitle,
     ]);
+
+    // Notify the employee if salary was assigned during creation.
+    $newSalary = $_POST['salary'] !== '' ? (float) $_POST['salary'] : 0;
+    if ($newSalary > 0) {
+        $linkedUser = db()->prepare('SELECT id FROM users WHERE employee_id = ? AND is_active = 1 LIMIT 1');
+        $linkedUser->execute([$employeeId]);
+        $linkedRow = $linkedUser->fetch();
+        if ($linkedRow) {
+            notifyUser(
+                (int) $linkedRow['id'],
+                'Salary Assigned',
+                'Your salary information has been set. View your salary details in My Salary.',
+                BASE_URL . '/modules/employee/salary.php'
+            );
+        }
+    }
 
     flash('success', 'Employee ' . $employeeNo . ' created.');
     redirect(BASE_URL . '/modules/hcm/index.php');
@@ -147,6 +167,32 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-group">
             <label for="salary">Salary</label>
             <input type="number" id="salary" name="salary" step="0.01" min="0" value="<?= e($_POST['salary'] ?? '') ?>">
+        </div>
+        <div class="form-group">
+            <label for="salary_type">Salary Type</label>
+            <select id="salary_type" name="salary_type">
+                <option value="">— Select —</option>
+                <?php foreach (['monthly', 'hourly', 'daily', 'annual'] as $st): ?>
+                <option value="<?= $st ?>" <?= ($_POST['salary_type'] ?? '') === $st ? 'selected' : '' ?>><?= ucfirst($st) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="pay_frequency">Pay Frequency</label>
+            <select id="pay_frequency" name="pay_frequency">
+                <option value="">— Select —</option>
+                <?php foreach (['monthly', 'semi_monthly', 'weekly', 'bi_weekly'] as $pf): ?>
+                <option value="<?= $pf ?>" <?= ($_POST['pay_frequency'] ?? '') === $pf ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $pf)) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+                <?php foreach (['PHP', 'USD', 'EUR', 'JPY', 'SGD'] as $cur): ?>
+                <option value="<?= $cur ?>" <?= ($_POST['currency'] ?? 'PHP') === $cur ? 'selected' : '' ?>><?= $cur ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="form-group">
             <label for="status">Status</label>

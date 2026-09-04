@@ -84,14 +84,14 @@ $ready = array_map(static function (array $r) {
     ]);
 }, $assignments);
 
-$pageTitle = 'Exam History';
+$pageTitle = 'Tracker';
 $currentModule = 'applicants';
 require_once __DIR__ . '/../../includes/header.php';
 ?>
 
 <div class="page-header fade-in-up">
     <div>
-        <h1 class="page-title">Exam History</h1>
+        <h1 class="page-title">Tracker</h1>
         <p class="page-subtitle">Centralized examination records and returned results across applicants</p>
     </div>
     <div class="btn-group">

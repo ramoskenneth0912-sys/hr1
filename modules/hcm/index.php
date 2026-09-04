@@ -88,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $employees = db()->query(
     'SELECT e.*, d.name AS department_name FROM employees e
      LEFT JOIN departments d ON e.department_id = d.id
+     WHERE e.status != \'terminated\'
      ORDER BY e.last_name, e.first_name'
 )->fetchAll();
 ?>
@@ -97,7 +98,10 @@ $employees = db()->query(
         <h1 class="page-title">Core HCM</h1>
         <p class="page-subtitle">Employee &amp; Employment Management</p>
     </div>
-    <a href="create.php" class="btn btn-primary">+ New Employee</a>
+    <div class="btn-group">
+        <a href="terminated.php" class="btn btn-outline">Terminated Employees</a>
+        <a href="create.php" class="btn btn-primary">+ New Employee</a>
+    </div>
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">

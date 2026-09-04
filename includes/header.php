@@ -49,6 +49,7 @@ if (isHRorManager()) {
     ];
     $navSections['MY WORK'] = [
         ['id' => 'leave-requests', 'label' => 'Leave Requests', 'url' => BASE_URL . '/modules/employee/leave.php', 'icon' => 'checklist'],
+        ['id' => 'my-salary', 'label' => 'My Salary', 'url' => BASE_URL . '/modules/employee/salary.php', 'icon' => 'briefcase'],
     ];
     $navSections['COMMUNICATION'] = [
         ['id' => 'notifications', 'label' => 'Notifications', 'url' => BASE_URL . '/modules/employee/notifications.php', 'icon' => 'bell'],

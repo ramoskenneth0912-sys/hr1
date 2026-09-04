@@ -161,10 +161,7 @@ $prefsStmt->execute([$uid]);
 foreach ($prefsStmt->fetchAll() as $r) {
     $prefs[$r['pref_key']] = (int) $r['enabled'];
 }
-$roleCounts = db()->query(
-    'SELECT role, COUNT(*) AS total, COALESCE(SUM(is_active = 1),0) AS active
-     FROM users GROUP BY role ORDER BY FIELD(role, "hr", "manager", "employee", "applicant")'
-)->fetchAll();
+
 
 $pageTitle = 'Settings';
 $currentModule = 'settings';
@@ -174,7 +171,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 $navItems = [
     'account' => 'Account', 'security' => 'Security', 'notifications' => 'Notifications',
-    'users-roles' => 'Users & Roles', 'hr-preferences' => 'HR Preferences',
+    'hr-preferences' => 'HR Preferences',
     'recruitment' => 'Recruitment',
 ];
 if ($isAdmin) { $navItems['system'] = 'System'; }
@@ -277,21 +274,7 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
     </form>
 </section>
 
-<!-- 4. USERS & ROLES -->
-<section id="users-roles" class="panel fade-in-up" style="animation-delay:.2s">
-    <h2>User &amp; Role Management</h2>
-    <p class="panel-desc">Accounts are managed in User Management — creation, editing, activation and deactivation live there.</p>
-    <div class="detail-grid">
-        <?php foreach ($roleCounts as $rc): ?>
-        <div class="detail-item"><label><?= e(ucfirst($rc['role'])) ?> accounts</label><span><?= (int) $rc['active'] ?> active / <?= (int) $rc['total'] ?> total</span></div>
-        <?php endforeach; ?>
-    </div>
-    <div class="form-actions">
-        <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-primary">Open User Management &rarr;</a>
-    </div>
-</section>
-
-<!-- 5. HR PREFERENCES -->
+<!-- 4. HR PREFERENCES -->
 <section id="hr-preferences" class="panel fade-in-up" style="animation-delay:.25s">
     <h2>HR / System Preferences</h2>
     <p class="panel-desc">Organization-wide values used across the HR system.</p>
@@ -347,7 +330,7 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
     </form>
 </section>
 
-<!-- 6. RECRUITMENT -->
+<!-- 5. RECRUITMENT -->
 <section id="recruitment" class="panel fade-in-up" style="animation-delay:.3s">
     <h2>Recruitment Settings</h2>
     <p class="panel-desc">Defaults applied to new applications and postings.</p>
@@ -376,7 +359,7 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
     </form>
 </section>
 
-<!-- 8. SYSTEM (ADMIN ONLY) -->
+<!-- 7. SYSTEM (ADMIN ONLY) -->
 <section id="system" class="panel fade-in-up" style="animation-delay:.4s">
     <h2>System Configuration</h2>
     <?php if ($isAdmin): ?>

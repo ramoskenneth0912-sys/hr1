@@ -98,7 +98,10 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <div class="page-header fade-in-up">
     <h1 class="page-title">New Job Posting</h1>
-    <a href="index.php" class="btn btn-outline">← Back</a>
+    <div class="btn-group">
+        <a href="recruitment_requests.php" class="btn btn-outline">Recruitment Requests</a>
+        <a href="index.php" class="btn btn-outline">← Back</a>
+    </div>
 </div>
 
 <?php if ($validationErrors): ?>

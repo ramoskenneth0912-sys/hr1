@@ -31,9 +31,14 @@ require_once __DIR__ . '/../../includes/header.php';
         <p class="page-subtitle"><?= e($employee['employee_no']) ?> — <?= statusBadge($employee['status']) ?></p>
     </div>
     <div class="btn-group">
+        <a href="salary.php?id=<?= $id ?>" class="btn btn-outline">Salary</a>
+        <?php if ($employee['status'] === 'terminated'): ?>
+        <a href="terminated.php" class="btn btn-outline">← Back</a>
+        <?php else: ?>
         <a href="edit.php?id=<?= $id ?>" class="btn btn-primary">Edit</a>
         <a href="<?= BASE_URL ?>/modules/onboarding/index.php?employee_id=<?= $id ?>" class="btn btn-outline">Onboarding</a>
         <a href="index.php" class="btn btn-outline">← Back</a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -44,7 +49,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <div class="detail-item"><label>Department</label><span><?= e($employee['department_name'] ?? '—') ?></span></div>
     <div class="detail-item"><label>Employment Type</label><span><?= e(ucfirst(str_replace('_', ' ', $employee['employment_type']))) ?></span></div>
     <div class="detail-item"><label>Hire Date</label><span><?= formatDate($employee['hire_date']) ?></span></div>
-    <div class="detail-item"><label>Salary</label><span><?= $employee['salary'] ? '₱' . number_format((float) $employee['salary'], 2) : '—' ?></span></div>
+    <div class="detail-item"><label>Employment Status</label><span><?= e(ucfirst(str_replace('_', ' ', $employee['status']))) ?></span></div>
 </section>
 
 <section class="panel fade-in-up" style="animation-delay:.2s">

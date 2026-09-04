@@ -54,7 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = db()->prepare(
         'UPDATE employees SET first_name=?, last_name=?, email=?, phone=?, department_id=?,
-         job_title=?, employment_type=?, hire_date=?, status=?, salary=? WHERE id=?'
+         job_title=?, employment_type=?, hire_date=?, status=?, salary=?, salary_type=?,
+         pay_frequency=?, currency=? WHERE id=?'
     );
     $stmt->execute([
         $firstName,
@@ -67,8 +68,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hireDate,
         $_POST['status'],
         $_POST['salary'] !== '' ? (float) $_POST['salary'] : null,
+        trim($_POST['salary_type'] ?? '') ?: null,
+        trim($_POST['pay_frequency'] ?? '') ?: null,
+        trim($_POST['currency'] ?? '') ?: 'PHP',
         $id,
     ]);
+
+    // Notify the employee if their salary was changed.
+    $oldSalary = (float) ($employee['salary'] ?? 0);
+    $newSalary = $_POST['salary'] !== '' ? (float) $_POST['salary'] : 0;
+    if ($newSalary !== $oldSalary) {
+        $linkedUser = db()->prepare('SELECT id FROM users WHERE employee_id = ? AND is_active = 1 LIMIT 1');
+        $linkedUser->execute([$id]);
+        $linkedRow = $linkedUser->fetch();
+        if ($linkedRow) {
+            if ($newSalary > 0 && $oldSalary === 0) {
+                notifyUser(
+                    (int) $linkedRow['id'],
+                    'Salary Assigned',
+                    'Your salary information has been set. View your salary details in My Salary.',
+                    BASE_URL . '/modules/employee/salary.php'
+                );
+            } elseif ($newSalary > 0) {
+                notifyUser(
+                    (int) $linkedRow['id'],
+                    'Salary Updated',
+                    'Your salary information has been updated. View your current salary in My Salary.',
+                    BASE_URL . '/modules/employee/salary.php'
+                );
+            } elseif ($newSalary === 0 && $oldSalary > 0) {
+                notifyUser(
+                    (int) $linkedRow['id'],
+                    'Salary Removed',
+                    'Your salary information has been removed. Please contact HR for details.',
+                    BASE_URL . '/modules/employee/salary.php'
+                );
+            }
+        }
+    }
+
     flash('success', 'Employee updated.');
     redirect(BASE_URL . '/modules/hcm/view.php?id=' . $id);
 }
@@ -156,6 +194,32 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-group">
             <label for="salary">Salary</label>
             <input type="number" id="salary" name="salary" step="0.01" value="<?= e($employee['salary']) ?>">
+        </div>
+        <div class="form-group">
+            <label for="salary_type">Salary Type</label>
+            <select id="salary_type" name="salary_type">
+                <option value="">— Select —</option>
+                <?php foreach (['monthly', 'hourly', 'daily', 'annual'] as $st): ?>
+                <option value="<?= $st ?>" <?= $employee['salary_type'] === $st ? 'selected' : '' ?>><?= ucfirst($st) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="pay_frequency">Pay Frequency</label>
+            <select id="pay_frequency" name="pay_frequency">
+                <option value="">— Select —</option>
+                <?php foreach (['monthly', 'semi_monthly', 'weekly', 'bi_weekly'] as $pf): ?>
+                <option value="<?= $pf ?>" <?= $employee['pay_frequency'] === $pf ? 'selected' : '' ?>><?= ucfirst(str_replace('_', ' ', $pf)) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="currency">Currency</label>
+            <select id="currency" name="currency">
+                <?php foreach (['PHP', 'USD', 'EUR', 'JPY', 'SGD'] as $cur): ?>
+                <option value="<?= $cur ?>" <?= ($employee['currency'] ?? 'PHP') === $cur ? 'selected' : '' ?>><?= $cur ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="form-group">
             <label for="status">Status</label>
