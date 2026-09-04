@@ -11,7 +11,69 @@
  */
 
 define('HR1_MAIL_FROM', getenv('HR1_MAIL_FROM') ?: 'no-reply@hr1.local');
+define('HR1_MAIL_FROM_NAME', 'TRI-M Global');
 define('HR1_APP_NAME', defined('APP_NAME') ? APP_NAME : 'Merchandising Management System');
+
+/**
+ * The branded sender identity shown to recipients, e.g.:
+ *   TRI-M Global <adminhr00001@gmail.com>
+ * Uses the existing HR Gmail address (HR1_MAIL_FROM) unchanged.
+ */
+function hr1MailFrom(): string
+{
+    $addr = HR1_MAIL_FROM;
+    $name = HR1_MAIL_FROM_NAME;
+    if ($name !== '') {
+        // RFC 5322 display-name: quote if it ever contains specials.
+        if (preg_match('/[^\x20-\x7E]|[()<>\[\]:;@\\\\,."]/', $name)) {
+            $name = '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $name) . '"';
+        }
+        return $name . ' <' . $addr . '>';
+    }
+    return $addr;
+}
+
+/**
+ * Absolute base URL for building email-attached asset links (logo, etc.).
+ * Falls back to BASE_URL-relative when no HTTP host is available.
+ */
+function hr1AbsBaseUrl(): string
+{
+    if (defined('BASE_URL')) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+        if ($host !== '') {
+            return $scheme . '://' . $host . rtrim(BASE_URL, '/');
+        }
+        return rtrim(BASE_URL, '/');
+    }
+    return '';
+}
+
+/**
+ * Absolute URL to the official TRI-M Global logo for email header branding.
+ * Returns '' (no logo) when the base URL cannot be resolved.
+ */
+function hr1LogoUrl(): string
+{
+    $base = hr1AbsBaseUrl();
+    return $base !== '' ? $base . '/assets/images/tri-m-logo.png' : '';
+}
+
+/**
+ * Centered official logo block for the top of HTML recruitment emails.
+ * Returns an empty string when no logo URL is available so emails remain valid.
+ */
+function hr1EmailLogoBlock(): string
+{
+    $logo = hr1LogoUrl();
+    if ($logo === '') {
+        return '';
+    }
+    return "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 24px 0;\"><tr><td align=\"center\">\n"
+        . "<img src=\"{$logo}\" alt=\"TRI-M Global\" style=\"display:block;max-height:56px;max-width:220px;border:0;\" />\n"
+        . "</td></tr></table>\n";
+}
 
 define('HR1_SENDMAIL_PATH', 'C:/xampp/sendmail/sendmail.exe');
 
@@ -37,7 +99,7 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
         $boundary = 'HR1-' . bin2hex(random_bytes(8));
         $headers = "To: {$toEmail}\r\n"
             . "Subject: {$subject}\r\n"
-            . "From: " . ($extra['From'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "From: " . ($extra['From'] ?? hr1MailFrom()) . "\r\n"
             . "Reply-To: " . ($extra['Reply-To'] ?? HR1_MAIL_FROM) . "\r\n"
             . "X-Mailer: HR1-System/2.0\r\n"
             . "MIME-Version: 1.0\r\n"
@@ -56,7 +118,7 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
     } else {
         $headers = "To: {$toEmail}\r\n"
             . "Subject: {$subject}\r\n"
-            . "From: " . ($extra['From'] ?? HR1_MAIL_FROM) . "\r\n"
+            . "From: " . ($extra['From'] ?? hr1MailFrom()) . "\r\n"
             . "Reply-To: " . ($extra['Reply-To'] ?? HR1_MAIL_FROM) . "\r\n"
             . "X-Mailer: HR1-System/2.0\r\n"
             . "MIME-Version: 1.0\r\n"
@@ -185,10 +247,9 @@ function sendApplicationAcceptedEmail(string $toEmail, string $applicantName, st
     
 
     $textBody = "Dear {$safeName},\n\n"
-        . "Congratulations! \n\n"
-        . "We are pleased to inform you that your application for the {$position} position at {$companyName}\n\n"
-        . "has been accepted and has progressed to the next stage of our recruitment process..\n\n"
-        . "As the next step, you are invited to take the Online Examination. Please access your examination using the link below::\n\n"
+        . "Congratulations!\n\n"
+        . "We are pleased to inform you that your application for the {$position} position at {$companyName} has been reviewed, and you have been qualified to proceed to the online examination as part of our recruitment process.\n\n"
+        . "As the next step, you are invited to take the Online Examination. Please access your examination using the link below:\n\n"
         . "[Access Online Examination]\n"
         . $examAccessLink . "\n\n"
         . "Please complete the examination within the required period and follow the instructions provided on the examination page.\n\n"
@@ -201,11 +262,11 @@ function sendApplicationAcceptedEmail(string $toEmail, string $applicantName, st
         . "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f6f8;padding:24px 0;\"><tr><td align=\"center\">\n"
         . "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;\">\n"
         . "<tr><td style=\"padding:28px 32px;\">\n"
+        . hr1EmailLogoBlock()
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Dear {$safeName},</p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\"><strong>Congratulations! {$congratulationMessage}</strong></p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Thank you for your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong></p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.</p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please access your examination using the link below:</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\"><strong>Congratulations!</strong></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong> has been reviewed, and you have been qualified to proceed to the online examination as part of our recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">As the next step, you are invited to take the Online Examination. Please access your examination using the link below:</p>\n"
         . "<p style=\"margin:0 0 20px 0;text-align:center;\"><a href=\"{$safeLink}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;\">Access Online Examination</a></p>\n"
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please complete the examination within the required period and follow the instructions provided on the examination page.</p>\n"
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Your examination result will be reviewed as part of the next stage of the recruitment process.</p>\n"
@@ -301,9 +362,9 @@ function sendExamAssignmentEmail(string $toEmail, string $applicantName, string 
     $safeLink = htmlspecialchars($examLink, ENT_QUOTES, 'UTF-8');
 
     $textBody = "Dear {$safeName},\n\n"
-        . "Thank you for your application for the {$position} position at {$companyName}\n\n"
-        . "We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.\n\n"
-        . "Please access your examination using the link below:\n\n"
+        . "Congratulations!\n\n"
+        . "We are pleased to inform you that your application for the {$position} position at {$companyName} has been reviewed, and you have been qualified to proceed to the online examination as part of our recruitment process.\n\n"
+        . "As the next step, you are invited to take the Online Examination. Please access your examination using the link below:\n\n"
         . "[Access Online Examination]\n"
         . $examLink . "\n\n"
         . "Please complete the examination within the required period and follow the instructions provided on the examination page.\n\n"
@@ -316,10 +377,11 @@ function sendExamAssignmentEmail(string $toEmail, string $applicantName, string 
         . "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f6f8;padding:24px 0;\"><tr><td align=\"center\">\n"
         . "<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;\">\n"
         . "<tr><td style=\"padding:28px 32px;\">\n"
+        . hr1EmailLogoBlock()
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Dear {$safeName},</p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Thank you for your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong></p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that you may now proceed with the Online Examination as part of our recruitment process.</p>\n"
-        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please access your examination using the link below:</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\"><strong>Congratulations!</strong></p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">We are pleased to inform you that your application for the <strong>{$position}</strong> position at <strong>{$companyName}</strong> has been reviewed, and you have been qualified to proceed to the online examination as part of our recruitment process.</p>\n"
+        . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">As the next step, you are invited to take the Online Examination. Please access your examination using the link below:</p>\n"
         . "<p style=\"margin:0 0 20px 0;text-align:center;\"><a href=\"{$safeLink}\" style=\"display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600;\">Access Online Examination</a></p>\n"
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Please complete the examination within the required period and follow the instructions provided on the examination page.</p>\n"
         . "<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.6;\">Your examination result will be reviewed as part of the next stage of the recruitment process.</p>\n"
