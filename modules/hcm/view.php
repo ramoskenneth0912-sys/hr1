@@ -45,8 +45,12 @@ require_once __DIR__ . '/../../includes/header.php';
 <section class="panel detail-grid fade-in-up" style="animation-delay:.1s">
     <div class="detail-item"><label>Email</label><span><?= e($employee['email']) ?></span></div>
     <div class="detail-item"><label>Phone</label><span><?= e($employee['phone'] ?: '—') ?></span></div>
-    <div class="detail-item"><label>Job Title</label><span><?= e($employee['job_title']) ?></span></div>
+    <div class="detail-item"><label>Current Role</label><span><?= e($employee['job_title']) ?></span></div>
+    <div class="detail-item"><label>Branch</label><span><?= e($employee['branch'] ?: '—') ?></span></div>
     <div class="detail-item"><label>Department</label><span><?= e($employee['department_name'] ?? '—') ?></span></div>
+    <div class="detail-item"><label>Education Level</label><span><?= e($employee['education_level'] ?: '—') ?></span></div>
+    <div class="detail-item"><label>Age</label><span><?= e($employee['age'] !== null ? (string) $employee['age'] : '—') ?></span></div>
+    <div class="detail-item"><label>Gender</label><span><?= e($employee['gender'] ?: '—') ?></span></div>
     <div class="detail-item"><label>Employment Type</label><span><?= e(ucfirst(str_replace('_', ' ', $employee['employment_type']))) ?></span></div>
     <div class="detail-item"><label>Hire Date</label><span><?= formatDate($employee['hire_date']) ?></span></div>
     <div class="detail-item"><label>Employment Status</label><span><?= e(ucfirst(str_replace('_', ' ', $employee['status']))) ?></span></div>

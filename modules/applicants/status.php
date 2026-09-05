@@ -71,59 +71,21 @@ if ($oldStatus !== $newStatus) {
     );
 }
 
-// Send the Online Examination email only for accepted / passed screening, and
-// only once (guard on acceptance_email_sent_at). Never on rejection.
-$emailMessage = null;
-if (in_array($newStatus, ['accepted', 'passed_screening'], true)
-    && empty($applicant['acceptance_email_sent_at'])) {
-    require_once __DIR__ . '/../../includes/mail.php';
-    require_once __DIR__ . '/../../includes/exam.php';
-    require_once __DIR__ . '/../../includes/security_log.php';
-
-    $applicantName = trim($applicant['first_name'] . ' ' . $applicant['last_name']);
-
-    // Ensure a secure, no-login exam access token exists (reuses the existing
-    // opaque token + pending-request mechanism; no fake exam/HR3 URL).
-    $token = ensureApplicantExamToken((int) $id, (int) ($_SESSION['user_id'] ?? 0));
-    $sent = false;
-    if ($token !== null) {
-        $examAccessLink = (defined('BASE_URL') ? BASE_URL : '/HR1')
-            . '/modules/applicant/exam_access.php?token=' . urlencode($token);
-        $sent = sendApplicationAcceptedEmail(
-            $applicant['email'],
-            $applicantName,
-            $applicant['position_applied'],
-            $examAccessLink
-        );
-    }
-
-    if ($sent) {
-        db()->prepare('UPDATE applicants SET acceptance_email_sent_at = NOW() WHERE id = ?')
-            ->execute([$id]);
-        securityLog(
-            'app_acceptance_email_sent',
-            'applicant_id=' . $id . ' status=' . $newStatus,
-            $_SESSION['user_id']
-        );
-    } else {
-        securityLog(
-            'app_acceptance_email_failed',
-            'applicant_id=' . $id . ' status=' . $newStatus,
-            $_SESSION['user_id']
-        );
-        $emailMessage = ' The acceptance email could not be sent, but the status was saved.';
-    }
-}
+// The Online Examination email is NOT sent when HR1 accepts or passes a
+// CV/resume. That email is triggered exclusively when HR3 has actually
+// assigned the requested examination to this specific applicant (see
+// assignExamToApplicant() in includes/exam.php). Accepting/passing screening
+// in HR1 only records the status and the in-app status notification above.
 
 $labels = applicationStatuses();
 if ($newStatus === 'rejected') {
-    flash('success', 'Application rejected. No acceptance email was sent, and this applicant can no longer be scheduled for an interview.');
+    flash('success', 'Application rejected. This applicant can no longer be scheduled for an interview.');
 } elseif ($newStatus === 'offered') {
     flash('success', 'Applicant marked as Selected. You can now move them to Hired.');
 } elseif ($newStatus === 'hired') {
     flash('success', 'Applicant marked as Hired.');
 } else {
-    flash('success', 'Application accepted. Applicant can now proceed to interview scheduling.' . ($emailMessage ?? ''));
+    flash('success', 'Application accepted. Applicant can now proceed to interview scheduling.');
 }
 
 redirect(BASE_URL . '/modules/applicants/view.php?id=' . $id);

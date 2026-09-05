@@ -41,7 +41,7 @@ elseif (strtoupper((string) ($employee['currency'] ?? 'PHP')) === 'SGD') { $curr
 
 <section class="panel detail-grid fade-in-up" style="animation-delay:.1s">
     <div class="detail-item"><label>Employee</label><span><?= e($employee['first_name'] . ' ' . $employee['last_name']) ?></span></div>
-    <div class="detail-item"><label>Position</label><span><?= e($employee['job_title']) ?></span></div>
+    <div class="detail-item"><label>Current Role</label><span><?= e($employee['job_title']) ?></span></div>
     <div class="detail-item"><label>Department</label><span><?= e($employee['department_name'] ?? '—') ?></span></div>
     <div class="detail-item"><label>Employment Status</label><span><?= statusBadge($employee['status']) ?></span></div>
 </section>

@@ -140,7 +140,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <input type="text" id="phone" name="phone" value="<?= e($_POST['phone'] ?? '') ?>">
         </div>
         <div class="form-group">
-            <label for="job_title">Job Title *</label>
+            <label for="job_title">Current Role *</label>
             <input type="text" id="job_title" name="job_title" required value="<?= e($_POST['job_title'] ?? '') ?>">
         </div>
         <div class="form-group">

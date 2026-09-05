@@ -127,7 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             $education,
             $skills,
             $workExperience,
-            $employeeId,
         ]);
     }
 

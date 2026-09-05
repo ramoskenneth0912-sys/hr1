@@ -6,7 +6,34 @@ $pageTitle = 'Employee Records';
 $currentModule = 'records';
 require_once __DIR__ . '/../../includes/header.php';
 
+$q = isset($_GET['q']) ? trim((string) $_GET['q']) : '';
+
 $employees = getEmployees(false);
+
+usort($employees, static function ($a, $b): int {
+    $hireCmp = strcmp((string) ($b['hire_date'] ?? ''), (string) ($a['hire_date'] ?? ''));
+    if ($hireCmp !== 0) {
+        return $hireCmp;
+    }
+    return strcmp((string) ($a['employee_no'] ?? ''), (string) ($b['employee_no'] ?? ''));
+});
+
+/*
+ * Case-insensitive search across employee number, name (first/last),
+ * current role (job_title), and department. Applied only to the in-memory
+ * list for display — employee records in the database are never modified.
+ */
+if ($q !== '') {
+    $employees = array_values(array_filter($employees, static function ($emp) use ($q) {
+        $fullName = trim(($emp['first_name'] ?? '') . ' ' . ($emp['last_name'] ?? ''));
+        foreach (['employee_no', 'first_name', 'last_name', 'job_title', 'department_name'] as $field) {
+            if (stripos((string) ($emp[$field] ?? ''), $q) !== false) {
+                return true;
+            }
+        }
+        return stripos($fullName, $q) !== false;
+    }));
+}
 
 /*
  * Resolve the selected employee safely. We never trust a raw employee_id from
@@ -157,17 +184,52 @@ function recordDocRow(array $r): array
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
     <h2>Select Employee</h2>
+    <style>
+        .records-search { display: flex; align-items: center; gap: .4rem; }
+        .records-search input {
+            padding: .5rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+            font-size: .875rem; font-family: inherit; color: var(--text); background: var(--surface);
+            min-width: 240px;
+        }
+        .records-search input::placeholder { color: var(--muted); }
+        .records-search input:focus { outline: none; border-color: var(--purple-light); box-shadow: 0 0 0 3px var(--purple-bg); }
+        .records-search .btn { display: inline-flex; align-items: center; justify-content: center; padding: .5rem .7rem; }
+        .records-search .btn svg { display: block; }
+        .search-results { margin-top: .75rem; }
+        .result-list { margin: 0; padding-left: 1.4rem; list-style: none; font-size: .875rem; color: var(--text); }
+        .result-list li { margin-bottom: .3rem; }
+        .result-num { color: var(--muted); margin-right: .4rem; font-variant-numeric: tabular-nums; }
+        .result-list a { color: var(--purple); text-decoration: none; }
+        .result-list a:hover { text-decoration: underline; }
+    </style>
     <form method="get" class="inline-form">
-        <label for="employee_id">Employee:</label>
-        <select id="employee_id" name="employee_id" onchange="this.form.submit()">
-            <option value="">Select an Employee</option>
-            <?php foreach ($employees as $emp): ?>
-            <option value="<?= (int) $emp['id'] ?>" <?= $selectedEmployeeId === (int) $emp['id'] ? 'selected' : '' ?>>
-                <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?> — <?= e($emp['job_title']) ?>
-            </option>
-            <?php endforeach; ?>
-        </select>
+        <div class="records-search">
+            <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search number, name, role, or department..." aria-label="Search employees">
+            <button type="submit" class="btn" aria-label="Search employees">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+            <?php if ($q !== ''): ?>
+            <a href="<?= BASE_URL ?>/modules/records/index.php" class="btn btn-outline btn-sm">Clear</a>
+            <?php endif; ?>
+        </div>
     </form>
+    <?php if ($q !== ''): ?>
+    <div class="search-results">
+        <?php if (empty($employees)): ?>
+            <p class="empty">No employees found.</p>
+        <?php else: ?>
+            <ol class="result-list">
+            <?php $n = 1; foreach ($employees as $emp): ?>
+                <li><span class="result-num"><?= $n ?>.</span>
+                    <a href="<?= BASE_URL ?>/modules/records/index.php?employee_id=<?= (int) $emp['id'] ?>&amp;q=<?= urlencode($q) ?>">
+                        <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?> — <?= e($emp['job_title']) ?> — <?= e($emp['department_name']) ?>
+                    </a>
+                </li>
+            <?php $n++; endforeach; ?>
+            </ol>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 </section>
 
 <?php if (!$selectedEmployeeId): ?>

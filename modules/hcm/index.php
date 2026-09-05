@@ -89,7 +89,7 @@ $employees = db()->query(
     'SELECT e.*, d.name AS department_name FROM employees e
      LEFT JOIN departments d ON e.department_id = d.id
      WHERE e.status != \'terminated\'
-     ORDER BY e.last_name, e.first_name'
+     ORDER BY e.employee_no DESC'
 )->fetchAll();
 ?>
 
@@ -111,7 +111,7 @@ $employees = db()->query(
                 <th>Employee No.</th>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Job Title</th>
+                <th>Current Role</th>
                 <th>Department</th>
                 <th>Type</th>
                 <th>Status</th>

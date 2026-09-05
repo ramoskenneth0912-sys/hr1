@@ -27,7 +27,7 @@ $employees = db()->query(
                 <th>Employee No.</th>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Job Title</th>
+                <th>Current Role</th>
                 <th>Department</th>
                 <th>Type</th>
                 <th>Status</th>

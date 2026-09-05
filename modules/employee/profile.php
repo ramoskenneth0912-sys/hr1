@@ -80,8 +80,12 @@ require_once __DIR__ . '/../../includes/header.php';
     <h2>Employment Information</h2>
     <div class="detail-grid">
         <div class="detail-item"><label>Employee No.</label><span><?= e($employee['employee_no'] ?? '—') ?></span></div>
-        <div class="detail-item"><label>Job Title</label><span><?= e($employee['job_title'] ?? '—') ?></span></div>
+        <div class="detail-item"><label>Current Role</label><span><?= e($employee['job_title'] ?? '—') ?></span></div>
+        <div class="detail-item"><label>Branch</label><span><?= e($employee['branch'] ?? '—') ?></span></div>
         <div class="detail-item"><label>Department</label><span><?= e($employee['department_name'] ?? '—') ?></span></div>
+        <div class="detail-item"><label>Education Level</label><span><?= e($employee['education_level'] ?? '—') ?></span></div>
+        <div class="detail-item"><label>Age</label><span><?= e(isset($employee['age']) && $employee['age'] !== null ? (string) $employee['age'] : '—') ?></span></div>
+        <div class="detail-item"><label>Gender</label><span><?= e($employee['gender'] ?? '—') ?></span></div>
         <div class="detail-item"><label>Employment Type</label><span><?= e(ucfirst(str_replace('_', ' ', $employee['employment_type'] ?? '—'))) ?></span></div>
         <div class="detail-item"><label>Hire Date</label><span><?= formatDate($employee['hire_date'] ?? null) ?></span></div>
         <div class="detail-item"><label>Status</label><span><?= statusBadge($employee['status'] ?? 'active') ?></span></div>

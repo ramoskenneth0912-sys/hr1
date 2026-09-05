@@ -44,7 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect(BASE_URL . '/modules/hcm/index.php');
         }
         foreach (['first_name', 'last_name', 'email', 'phone', 'department_id',
-            'job_title', 'employment_type', 'hire_date', 'salary', 'status'] as $k) {
+            'job_title', 'employment_type', 'hire_date', 'salary', 'status',
+            'branch', 'gender', 'age', 'education_level'] as $k) {
             if (array_key_exists($k, $_POST)) {
                 $employee[$k] = $_POST[$k];
             }
@@ -55,8 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt = db()->prepare(
         'UPDATE employees SET first_name=?, last_name=?, email=?, phone=?, department_id=?,
          job_title=?, employment_type=?, hire_date=?, status=?, salary=?, salary_type=?,
-         pay_frequency=?, currency=? WHERE id=?'
+         pay_frequency=?, currency=?, branch=?, gender=?, age=?, education_level=? WHERE id=?'
     );
+    $ageValue = ($_POST['age'] ?? '') !== '' ? (int) $_POST['age'] : null;
     $stmt->execute([
         $firstName,
         $lastName,
@@ -71,6 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         trim($_POST['salary_type'] ?? '') ?: null,
         trim($_POST['pay_frequency'] ?? '') ?: null,
         trim($_POST['currency'] ?? '') ?: 'PHP',
+        trim($_POST['branch'] ?? '') ?: null,
+        trim($_POST['gender'] ?? '') ?: null,
+        $ageValue,
+        trim($_POST['education_level'] ?? '') ?: null,
         $id,
     ]);
 
@@ -165,8 +171,28 @@ require_once __DIR__ . '/../../includes/header.php';
             <input type="text" id="phone" name="phone" value="<?= e($employee['phone']) ?>">
         </div>
         <div class="form-group">
-            <label for="job_title">Job Title *</label>
+            <label for="job_title">Current Role *</label>
             <input type="text" id="job_title" name="job_title" value="<?= e($employee['job_title']) ?>" required>
+        </div>
+        <div class="form-group">
+            <label for="branch">Branch</label>
+            <input type="text" id="branch" name="branch" value="<?= e($employee['branch']) ?>">
+        </div>
+        <div class="form-group">
+            <label for="age">Age</label>
+            <input type="number" id="age" name="age" min="16" max="99" value="<?= e($employee['age'] !== null ? (string) $employee['age'] : '') ?>">
+        </div>
+        <div class="form-group">
+            <label for="gender">Gender</label>
+            <select id="gender" name="gender">
+                <option value="">— Select —</option>
+                <option value="Female" <?= $employee['gender'] === 'Female' ? 'selected' : '' ?>>Female</option>
+                <option value="Male" <?= $employee['gender'] === 'Male' ? 'selected' : '' ?>>Male</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="education_level">Education Level</label>
+            <input type="text" id="education_level" name="education_level" value="<?= e($employee['education_level']) ?>">
         </div>
         <div class="form-group">
             <label for="department_id">Department</label>

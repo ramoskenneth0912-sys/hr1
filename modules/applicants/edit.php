@@ -101,49 +101,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 
-    // Send the Online Examination email when HR moves the applicant to an
-    // accepted stage, using the email already stored in the database. Guarded
-    // so it is sent at most once per applicant (prevents duplicate emails).
-    if (in_array($newStatus, ['accepted', 'passed_screening'], true)
-        && empty($fresh['acceptance_email_sent_at'])) {
-        require_once __DIR__ . '/../../includes/mail.php';
-        require_once __DIR__ . '/../../includes/exam.php';
-        require_once __DIR__ . '/../../includes/security_log.php';
-
-        $applicantName = trim($fresh['first_name'] . ' ' . $fresh['last_name']);
-
-        // Ensure a secure, no-login exam access token exists (reuses the
-        // existing opaque token + pending-request mechanism).
-        $token = ensureApplicantExamToken((int) $id, (int) ($_SESSION['user_id'] ?? 0));
-        $sent = false;
-        if ($token !== null) {
-            $examAccessLink = (defined('BASE_URL') ? BASE_URL : '/HR1')
-                . '/modules/applicant/exam_access.php?token=' . urlencode($token);
-            $sent = sendApplicationAcceptedEmail(
-                $fresh['email'],
-                $applicantName,
-                $fresh['position_applied'],
-                $examAccessLink
-            );
-        }
-
-        if ($sent) {
-            db()->prepare('UPDATE applicants SET acceptance_email_sent_at = NOW() WHERE id = ?')
-                ->execute([$id]);
-            securityLog(
-                'app_acceptance_email_sent',
-                'applicant_id=' . $id . ' status=' . $fresh['status'],
-                $_SESSION['user_id']
-            );
-        } else {
-            // Email failed — application status remains Accepted/Passed Screening.
-            securityLog(
-                'app_acceptance_email_failed',
-                'applicant_id=' . $id . ' status=' . $fresh['status'],
-                $_SESSION['user_id']
-            );
-        }
-    }
+    // The Online Examination email is NOT sent when HR1 edits an applicant or
+    // moves them to an accepted/passed-screening stage. That email is triggered
+    // exclusively when HR3 has actually assigned the requested examination to
+    // this specific applicant (see assignExamToApplicant() in includes/exam.php).
 
     flash('success', 'Applicant updated successfully.');
     redirect(BASE_URL . '/modules/applicants/view.php?id=' . $id);
