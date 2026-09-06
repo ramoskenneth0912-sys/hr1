@@ -29,27 +29,7 @@ if (!$screening) {
     redirect(BASE_URL . '/modules/applicants/view.php?id=' . $applicantId);
 }
 
-$matched = json_decode($screening['matched_requirements'] ?? '[]', true) ?: [];
-$missing = json_decode($screening['missing_requirements'] ?? '[]', true) ?: [];
-
-$recommendationClass = 'badge-secondary';
-if ($screening['recommendation'] === 'Strong Match') {
-    $recommendationClass = 'badge-success';
-} elseif ($screening['recommendation'] === 'Good Match') {
-    $recommendationClass = 'badge-info';
-} elseif ($screening['recommendation'] === 'Moderate Match') {
-    $recommendationClass = 'badge-warning';
-} elseif ($screening['recommendation'] === 'Low Match') {
-    $recommendationClass = 'badge-danger';
-}
-
-function scoreColor(int $score): string
-{
-    if ($score >= 80) return 'var(--success)';
-    if ($score >= 60) return 'var(--info)';
-    if ($score >= 40) return 'var(--warning)';
-    return 'var(--danger)';
-}
+$scStatus = (string) ($screening['status'] ?? 'analyzed');
 
 $pageTitle = 'AI Screening — ' . $applicant['first_name'] . ' ' . $applicant['last_name'];
 $currentModule = 'applicants';
@@ -67,31 +47,79 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 </div>
 
+<?php if ($scStatus === 'pending'): ?>
+
+<section class="panel fade-in-up" style="animation-delay:.1s;">
+    <h2>AI Screening in Progress</h2>
+    <p style="color:var(--muted);margin:.25rem 0 0;">A match analysis was just started for this applicant. The result is being calculated and stored server-side — refresh this page in a moment to see it.</p>
+</section>
+
+<?php elseif ($scStatus === 'failed'): ?>
+
+<section class="panel fade-in-up" style="animation-delay:.1s;">
+    <h2>AI Screening Unavailable</h2>
+    <p style="color:var(--muted);margin:.25rem 0 1rem;">An AI match result could not be produced for this applicant. This can happen when the resume cannot be read (unsupported/corrupt file) or the screening service was temporarily unreachable. The application itself is unaffected — only the match analysis is missing.</p>
+    <?php $ocrCheck = ocrAvailabilityCheck(); if (!$ocrCheck['ok']): ?>
+        <p style="color:var(--danger);margin:.25rem 0 1rem;"><strong>Server notice:</strong> <?= e($ocrCheck['reason']) ?>. <?= e($ocrCheck['hint']) ?></p>
+    <?php endif; ?>
+    <form method="post" action="screening.php" style="margin:0;display:inline;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="applicant_id" value="<?= $applicantId ?>">
+        <button type="submit" class="btn btn-primary">Re-run AI Screening</button>
+    </form>
+</section>
+
+<?php else: ?>
+<?php
+$matched = json_decode($screening['matched_requirements'] ?? '[]', true) ?: [];
+$missing = json_decode($screening['missing_requirements'] ?? '[]', true) ?: [];
+
+$recommendationClass = 'badge-secondary';
+if ($screening['recommendation'] === 'Strong Match') {
+    $recommendationClass = 'badge-success';
+} elseif ($screening['recommendation'] === 'Good Match') {
+    $recommendationClass = 'badge-info';
+} elseif ($screening['recommendation'] === 'Moderate Match') {
+    $recommendationClass = 'badge-warning';
+} elseif ($screening['recommendation'] === 'Low Match') {
+    $recommendationClass = 'badge-danger';
+}
+
+/**
+ * Sub-category scores are null when the result comes from the remote
+ * provider (which returns an overall match only).
+ */
+$subScores = [
+    'Skills Match'        => $screening['skills_score'],
+    'Experience Match'    => $screening['experience_score'],
+    'Education Match'     => $screening['education_score'],
+    'Qualifications Match' => $screening['qualifications_score'],
+];
+
+function scoreColor(int $score): string
+{
+    if ($score >= 80) return 'var(--success)';
+    if ($score >= 60) return 'var(--info)';
+    if ($score >= 40) return 'var(--warning)';
+    return 'var(--danger)';
+}
+?>
+
 <div class="stats-grid fade-in-up" style="grid-template-columns: repeat(4, 1fr); animation-delay:.05s;">
     <div class="stat-card">
         <div class="stat-info">
-            <span class="stat-number" style="color:<?= scoreColor($screening['overall_score']) ?>;"><?= (int) $screening['overall_score'] ?>%</span>
+            <span class="stat-number" style="color:<?= scoreColor((int) $screening['overall_score']) ?>;"><?= (int) $screening['overall_score'] ?>%</span>
             <span class="stat-label">Overall Match</span>
         </div>
     </div>
+    <?php foreach ($subScores as $label => $val): ?>
     <div class="stat-card">
         <div class="stat-info">
-            <span class="stat-number" style="color:<?= scoreColor($screening['skills_score']) ?>;"><?= (int) $screening['skills_score'] ?>%</span>
-            <span class="stat-label">Skills Match</span>
+            <span class="stat-number" <?= $val !== null ? 'style="color:' . scoreColor((int) $val) . ';"' : '' ?>><?= $val !== null ? ((int) $val) . '%' : '—' ?></span>
+            <span class="stat-label"><?= e($label) ?></span>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-info">
-            <span class="stat-number" style="color:<?= scoreColor($screening['experience_score']) ?>;"><?= (int) $screening['experience_score'] ?>%</span>
-            <span class="stat-label">Experience Match</span>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-info">
-            <span class="stat-number" style="color:<?= scoreColor($screening['education_score']) ?>;"><?= (int) $screening['education_score'] ?>%</span>
-            <span class="stat-label">Education Match</span>
-        </div>
-    </div>
+    <?php endforeach; ?>
 </div>
 
 <div class="two-col fade-in-up" style="animation-delay:.1s;">
@@ -99,7 +127,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <h2>AI Screening Result</h2>
         <div class="screening-result-card">
             <div class="screening-overall">
-                <div class="screening-score-circle" style="--score-color: <?= scoreColor($screening['overall_score']) ?>;">
+                <div class="screening-score-circle" style="--score-color: <?= scoreColor((int) $screening['overall_score']) ?>;">
                     <span class="screening-score-value"><?= (int) $screening['overall_score'] ?>%</span>
                 </div>
                 <div class="screening-rec">
@@ -108,26 +136,18 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
 
             <div class="screening-scores-detail">
+                <?php foreach ($subScores as $label => $val): ?>
                 <div class="screening-score-row">
-                    <span class="screening-score-label">Skills Match</span>
-                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:<?= (int) $screening['skills_score'] ?>%;background:<?= scoreColor($screening['skills_score']) ?>;"></div></div>
-                    <span class="screening-score-pct"><?= (int) $screening['skills_score'] ?>%</span>
+                    <span class="screening-score-label"><?= e($label) ?></span>
+                    <?php if ($val !== null): ?>
+                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:<?= (int) $val ?>%;background:<?= scoreColor((int) $val) ?>;"></div></div>
+                    <span class="screening-score-pct"><?= (int) $val ?>%</span>
+                    <?php else: ?>
+                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:0%;"></div></div>
+                    <span class="screening-score-pct">—</span>
+                    <?php endif; ?>
                 </div>
-                <div class="screening-score-row">
-                    <span class="screening-score-label">Experience Match</span>
-                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:<?= (int) $screening['experience_score'] ?>%;background:<?= scoreColor($screening['experience_score']) ?>;"></div></div>
-                    <span class="screening-score-pct"><?= (int) $screening['experience_score'] ?>%</span>
-                </div>
-                <div class="screening-score-row">
-                    <span class="screening-score-label">Education Match</span>
-                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:<?= (int) $screening['education_score'] ?>%;background:<?= scoreColor($screening['education_score']) ?>;"></div></div>
-                    <span class="screening-score-pct"><?= (int) $screening['education_score'] ?>%</span>
-                </div>
-                <div class="screening-score-row">
-                    <span class="screening-score-label">Qualifications Match</span>
-                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:<?= (int) $screening['qualifications_score'] ?>%;background:<?= scoreColor($screening['qualifications_score']) ?>;"></div></div>
-                    <span class="screening-score-pct"><?= (int) $screening['qualifications_score'] ?>%</span>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </section>
@@ -216,5 +236,6 @@ require_once __DIR__ . '/../../includes/header.php';
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

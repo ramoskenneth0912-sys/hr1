@@ -10,6 +10,7 @@
 require_once __DIR__ . '/../../includes/auth.php';
 requireLogin();
 requireNotApplicant();
+require_once __DIR__ . '/../../includes/security_log.php';
 
 if (isEmployee()) {
     flash('info', 'Employee settings live in your own portal.');
@@ -147,9 +148,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$isAdmin) {
             flash('danger', 'Only Admin users may change system configuration.');
         } else {
-            save_settings(['sys_name', 'sys_language', 'sys_maintenance']);
+            save_settings(['sys_name', 'sys_language']);
             flash('success', 'System configuration saved.');
         }
+        redirect(BASE_URL . '/modules/settings/index.php#system');
+    }
+
+    if ($action === 'save_maintenance') {
+        if (!$isAdmin) {
+            flash('danger', 'Only Admin users may change maintenance mode.');
+            redirect(BASE_URL . '/modules/settings/index.php#system');
+        }
+
+        $mode = strtolower(trim((string) ($_POST['maintenance_mode'] ?? 'off')));
+        if (!in_array($mode, maintenance_valid_modes(), true)) {
+            $mode = 'off';
+        }
+        $oldMode = maintenance_store_mode();
+
+        $message = trim((string) ($_POST['maintenance_message'] ?? ''));
+        $message = (string) preg_replace('/\R+/u', ' ', $message);
+        $message = mb_substr($message, 0, 500);
+
+        $endRaw   = trim((string) ($_POST['maintenance_end_at'] ?? ''));
+        $endAt    = $endRaw !== '' ? $endRaw : null;
+
+        $dtValid = static function (?string $v): bool {
+            if ($v === null) {
+                return true;
+            }
+            return preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/', $v) === 1;
+        };
+        if (!$dtValid($endAt)) {
+            flash('danger', 'Invalid maintenance schedule. Use the date/time pickers.');
+            redirect(BASE_URL . '/modules/settings/index.php#system');
+        }
+
+        $modules = [];
+        if ($mode === 'limited' && isset($_POST['maintenance_modules']) && is_array($_POST['maintenance_modules'])) {
+            foreach ($_POST['maintenance_modules'] as $slug) {
+                $slug = (string) $slug;
+                if (isset(MAINTENANCE_MODULE_DEFS[$slug]) && !in_array($slug, $modules, true)) {
+                    $modules[] = $slug;
+                }
+            }
+        }
+        $modulesJson = $modules !== [] ? json_encode($modules) : null;
+
+        $stmt = db()->prepare(
+            'UPDATE maintenance_settings
+             SET mode = :mode, message = :message, start_at = NULL, end_at = :end_at,
+                 selected_modules = :modules, updated_by = :uid
+             WHERE id = 1'
+        );
+        $stmt->execute([
+            ':mode'     => $mode,
+            ':message'  => $message !== '' ? $message : null,
+            ':end_at'   => $endAt,
+            ':modules'  => $modulesJson,
+            ':uid'      => $uid,
+        ]);
+
+        $summary = 'mode=' . $oldMode . '->' . $mode
+            . ($mode === 'limited' ? ' modules=[' . implode(',', $modules) . ']' : '')
+            . ($endAt !== null ? ' end=' . $endAt : '');
+        securityLog('maintenance_mode_change', $summary, $uid);
+
+        flash('success', 'Maintenance mode saved.');
         redirect(BASE_URL . '/modules/settings/index.php#system');
     }
 }
@@ -364,6 +429,28 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
     <h2>System Configuration</h2>
     <?php if ($isAdmin): ?>
     <p class="panel-desc">Sensitive system-wide settings. Changes take effect across the platform.</p>
+
+    <?php
+    $mmxCfg      = maintenance_config();
+    $mmxMode     = maintenance_mode();
+    $mmxStored   = maintenance_store_mode();
+    $mmxSelected = maintenance_selected_modules();
+    $mmxMsg      = trim((string) ($mmxCfg['message'] ?? ''));
+    $mmxFmt      = static function ($v): string { return $v ? substr(str_replace(' ', 'T', (string) $v), 0, 16) : ''; };
+    $mmxEnd      = $mmxFmt($mmxCfg['end_at'] ?? '');
+    $modeLabels  = [
+        'off'     => 'Off',
+        'limited' => 'Limited (block selected modules)',
+        'full'    => 'Full (everything down)',
+    ];
+    $modeHints   = [
+        'off'     => 'System fully available, no banner.',
+        'limited' => 'Only the modules you select below are blocked (503 page). Everything else works and shows a banner.',
+        'full'    => 'Whole system down for everyone except HR admins, who keep full access so they can manage this screen.',
+    ];
+    $statusText  = $mmxMode === 'off' ? 'Operational' : 'Maintenance active — ' . ucfirst($mmxMode) . ' mode';
+    ?>
+
     <form method="post" class="form-panel compact-form" onsubmit="return confirm('Apply system configuration changes?');">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="save_system">
@@ -375,20 +462,102 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
                     <option value="fil" <?= get_setting('sys_language') === 'fil' ? 'selected' : '' ?>>Filipino</option>
                 </select>
             </div>
-            <div class="form-group"><label>Maintenance Mode</label>
-                <select name="sys_maintenance">
-                    <option value="0" <?= get_setting('sys_maintenance') === '0' ? 'selected' : '' ?>>Off</option>
-                    <option value="1" <?= get_setting('sys_maintenance') === '1' ? 'selected' : '' ?>>On (banner shown)</option>
-                </select>
-            </div>
-        </div>
-        <div class="detail-grid" style="margin-top:.75rem;">
-            <div class="detail-item"><label>System Status</label><span><span class="live-dot"></span> Operational</span></div>
         </div>
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Save System Configuration</button>
         </div>
     </form>
+
+    <h3 style="margin-top:1.5rem;">Maintenance Mode</h3>
+    <p class="panel-desc">
+    <form method="post" class="form-panel compact-form" id="maintenanceForm" onsubmit="return confirm('Apply maintenance mode changes?');">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="save_maintenance">
+
+        <div class="detail-grid" style="margin-bottom:.75rem;">
+            <div class="detail-item"><label>System Status</label>
+                <span style="<?= $mmxMode === 'off' ? '' : 'color:var(--warning);font-weight:700;' ?>">
+                    <?php if ($mmxMode === 'off'): ?><span class="live-dot"></span><?php endif; ?>
+                    <?= e($statusText) ?>
+                </span>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <?php foreach ($modeLabels as $val => $label): ?>
+            <label class="mmx-radio">
+                <input type="radio" name="maintenance_mode" value="<?= e($val) ?>" <?= $mmxStored === $val ? 'checked' : '' ?> data-mmx-mode>
+                <span class="mmx-radio-box">
+                    <strong><?= e($label) ?></strong>
+                    <small><?= e($modeHints[$val]) ?></small>
+                </span>
+            </label>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="mmx-hidden" style="margin-top:.9rem;" id="mmxModuleBlock">
+            <div class="form-group">
+                <label>Modules to block (Limited mode)</label>
+                <div class="mmx-modules">
+                    <?php foreach (MAINTENANCE_MODULE_DEFS as $slug => $def): ?>
+                    <label class="mmx-chip">
+                        <input type="checkbox" name="maintenance_modules[]" value="<?= e($slug) ?>" <?= in_array($slug, $mmxSelected, true) ? 'checked' : '' ?>>
+                        <span><?= e($def['label']) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="mmx-hidden form-group full-width" style="margin-top:.9rem;" id="mmxScheduleBlock">
+            <label>Schedule End (optional) </label>
+            <input type="datetime-local" name="maintenance_end_at" value="<?= e($mmxEnd) ?>">
+        </div>
+
+        <div class="mmx-hidden form-group full-width" style="margin-top:.9rem;" id="mmxMessageBlock">
+            <label>Message (optional)</label>
+            <input type="text" name="maintenance_message" maxlength="500" value="<?= e($mmxMsg) ?>" placeholder="Leave blank to use the default message for the selected mode.">
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Maintenance Mode</button>
+        </div>
+    </form>
+
+    <style>
+        .mmx-hidden{ display:none !important; }
+        .mmx-radio{ cursor:pointer; display:block; }
+        .mmx-radio input{ position:absolute; opacity:0; pointer-events:none; }
+        .mmx-radio-box{ display:flex; flex-direction:column; gap:.15rem; border:1px solid var(--border,#E9EDF7); border-radius:var(--radius,14px); padding:.7rem .85rem; background:var(--surface,#fff); transition:border-color .15s ease, box-shadow .15s ease; }
+        .mmx-radio input:checked + .mmx-radio-box{ border-color:var(--purple,#7B2CBF); box-shadow:0 0 0 3px rgba(123,44,191,.14); }
+        .mmx-radio-box small{ color:var(--muted,#77809b); font-size:.72rem; line-height:1.4; }
+        .mmx-modules{ display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.35rem; }
+        .mmx-chip{ display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; }
+        .mmx-chip span{ border:1px solid var(--border,#E9EDF7); border-radius:999px; padding:.35rem .8rem; font-size:.78rem; background:var(--surface,#fff); transition:border-color .15s ease, box-shadow .15s ease; }
+        .mmx-chip input{ position:absolute; opacity:0; pointer-events:none; }
+        .mmx-chip input:checked + span{ border-color:var(--purple,#7B2CBF); box-shadow:0 0 0 2px rgba(123,44,191,.18); color:var(--purple,#7B2CBF); font-weight:600; }
+    </style>
+    <script>
+    (function () {
+        var modeInputs = document.querySelectorAll('#maintenanceForm input[data-mmx-mode]');
+        var moduleBlock = document.getElementById('mmxModuleBlock');
+        var scheduleBlock = document.getElementById('mmxScheduleBlock');
+        var messageBlock = document.getElementById('mmxMessageBlock');
+        function setHidden(el, hide) {
+            if (!el) return;
+            if (hide) { el.classList.add('mmx-hidden'); } else { el.classList.remove('mmx-hidden'); }
+        }
+        function sync() {
+            var v = null;
+            modeInputs.forEach(function (i) { if (i.checked) v = i.value; });
+            setHidden(moduleBlock, v !== 'limited');
+            setHidden(scheduleBlock, v === 'off');
+            setHidden(messageBlock, v === 'off');
+        }
+        modeInputs.forEach(function (i) { i.addEventListener('change', sync); });
+        sync();
+    })();
+    </script>
     <?php else: ?>
     <p class="panel-desc">System-level configuration is restricted to Admin accounts. Ask an administrator to adjust these values.</p>
     <?php endif; ?>

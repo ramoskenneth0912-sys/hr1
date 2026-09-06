@@ -72,8 +72,19 @@ require_once __DIR__ . '/../../includes/header.php';
         <p class="page-subtitle"><?= e($applicant['applicant_no']) ?> — <?= statusBadge($applicant['status']) ?></p>
     </div>
     <div class="btn-group">
-        <?php if ($screening): ?>
+        <?php
+        $scStatus = $screening ? (string) ($screening['status'] ?? 'analyzed') : '';
+        if ($screening && $scStatus === 'analyzed'): ?>
         <a href="screening_view.php?id=<?= $id ?>" class="btn btn-primary">View AI Screening</a>
+        <?php elseif ($screening && $scStatus === 'pending'): ?>
+        <span class="btn btn-primary" style="opacity:.6;pointer-events:none;">Analyzing...</span>
+        <?php elseif ($screening && $scStatus === 'failed'): ?>
+        <a href="screening_view.php?id=<?= $id ?>" class="btn btn-outline">View AI Screening</a>
+        <form method="post" action="screening.php" style="margin:0;display:inline;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="applicant_id" value="<?= $id ?>">
+            <button type="submit" class="btn btn-primary">Re-run AI Screening</button>
+        </form>
         <?php else: ?>
         <form method="post" action="screening.php" style="margin:0;display:inline;">
             <?= csrf_field() ?>
@@ -176,7 +187,13 @@ require_once __DIR__ . '/../../includes/header.php';
 </section>
 <?php endif; ?>
 
-<?php if ($screening): ?>
+<?php if ($screening && $scStatus === 'analyzed'): ?>
+<?php
+    $scMatched = json_decode((string) ($screening['matched_requirements'] ?? 'null'), true);
+    $scMissing = json_decode((string) ($screening['missing_requirements'] ?? 'null'), true);
+    $scMatched = is_array($scMatched) ? $scMatched : [];
+    $scMissing = is_array($scMissing) ? $scMissing : [];
+?>
 <section class="panel fade-in-up" style="animation-delay:.2s;">
     <div class="panel-header">
         <h2>AI Screening Summary</h2>
@@ -190,19 +207,19 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
             <div class="screening-summary-item">
                 <span class="screening-summary-label">Skills</span>
-                <span class="screening-summary-value"><?= (int) $screening['skills_score'] ?>%</span>
+                <span class="screening-summary-value"><?= $screening['skills_score'] !== null ? (int) $screening['skills_score'] . '%' : '—' ?></span>
             </div>
             <div class="screening-summary-item">
                 <span class="screening-summary-label">Experience</span>
-                <span class="screening-summary-value"><?= (int) $screening['experience_score'] ?>%</span>
+                <span class="screening-summary-value"><?= $screening['experience_score'] !== null ? (int) $screening['experience_score'] . '%' : '—' ?></span>
             </div>
             <div class="screening-summary-item">
                 <span class="screening-summary-label">Education</span>
-                <span class="screening-summary-value"><?= (int) $screening['education_score'] ?>%</span>
+                <span class="screening-summary-value"><?= $screening['education_score'] !== null ? (int) $screening['education_score'] . '%' : '—' ?></span>
             </div>
             <div class="screening-summary-item">
                 <span class="screening-summary-label">Qualifications</span>
-                <span class="screening-summary-value"><?= (int) $screening['qualifications_score'] ?>%</span>
+                <span class="screening-summary-value"><?= $screening['qualifications_score'] !== null ? (int) $screening['qualifications_score'] . '%' : '—' ?></span>
             </div>
         </div>
         <div class="screening-summary-rec">
@@ -210,6 +227,58 @@ require_once __DIR__ . '/../../includes/header.php';
             <span class="screening-summary-date">Screened: <?= date('M d, Y h:i A', strtotime($screening['screened_at'])) ?></span>
         </div>
     </div>
+    <?php if (!empty($scMatched) || !empty($scMissing)): ?>
+    <div class="screening-gaps">
+        <?php if (!empty($scMatched)): ?>
+        <div class="screening-gap-col">
+            <strong class="screening-gap-head screening-gap-matched">Matched</strong>
+            <ul class="screening-gap-list">
+                <?php foreach (array_slice($scMatched, 0, 6) as $item): ?>
+                <li><?= e((string) $item) ?></li>
+                <?php endforeach; ?>
+                <?php if (count($scMatched) > 6): ?>
+                <li class="text-muted">+<?= count($scMatched) - 6 ?> more in full analysis</li>
+                <?php endif; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($scMissing)): ?>
+        <div class="screening-gap-col">
+            <strong class="screening-gap-head screening-gap-missing">Potential Gaps</strong>
+            <ul class="screening-gap-list">
+                <?php foreach (array_slice($scMissing, 0, 6) as $item): ?>
+                <li><?= e((string) $item) ?></li>
+                <?php endforeach; ?>
+                <?php if (count($scMissing) > 6): ?>
+                <li class="text-muted">+<?= count($scMissing) - 6 ?> more in full analysis</li>
+                <?php endif; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+</section>
+<?php elseif ($screening && $scStatus === 'pending'): ?>
+<section class="panel fade-in-up" style="animation-delay:.2s;">
+    <div class="panel-header">
+        <h2>AI Screening Summary</h2>
+    </div>
+    <p style="color:var(--muted);margin:0;">This applicant was just analyzed. The match result is being stored — check back in a moment or refresh the page.</p>
+</section>
+<?php elseif ($screening && $scStatus === 'failed'): ?>
+<section class="panel fade-in-up" style="animation-delay:.2s;">
+    <div class="panel-header">
+        <h2>AI Screening Summary</h2>
+        <form method="post" action="screening.php" style="margin:0;display:inline;">
+            <?= csrf_field() ?>
+            <input type="hidden" name="applicant_id" value="<?= $id ?>">
+            <button type="submit" class="btn btn-sm btn-primary">Re-run AI Screening</button>
+        </form>
+    </div>
+    <p style="color:var(--muted);margin:0 0 .75rem;">An AI match result is currently unavailable for this applicant. This can happen when a resume cannot be read or when the screening service is temporarily unreachable. The application itself was not affected.</p>
+    <?php $ocrCheck = ocrAvailabilityCheck(); if (!$ocrCheck['ok']): ?>
+        <p style="color:var(--danger);margin:0;"><strong>Server notice:</strong> <?= e($ocrCheck['reason']) ?>. <?= e($ocrCheck['hint']) ?></p>
+    <?php endif; ?>
 </section>
 <?php endif; ?>
 

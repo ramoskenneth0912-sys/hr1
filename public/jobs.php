@@ -3,7 +3,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/security_headers.php';
 
-if (isLoggedIn() && isEmployee()) {
+if (isLoggedIn() && isEmployee() && !maintenance_is_active()) {
     header('Location: ' . BASE_URL . '/index.php');
     exit;
 }
@@ -972,6 +972,7 @@ $professions = [
     </style>
 </head>
 <body class="public-body">
+<?php require __DIR__ . '/../includes/maintenance_banner.php'; ?>
     <a class="skip-link" href="#jobs">Skip to job listings</a>
     <header class="site-header">
         <div class="container container-wide">

@@ -2,12 +2,13 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/security_headers.php';
 require_once __DIR__ . '/../includes/rate_limit.php';
+require_once __DIR__ . '/../includes/ai_screening.php';
 
 const RESUME_MAX_BYTES = 5 * 1024 * 1024; // 5 MB, matches the hint shown in the form
 const APPLY_MAX_SUBMISSIONS = 20;         // successful submissions per IP per window
 const APPLY_WINDOW_SECONDS = 900;         // 15 minutes
 
-if (isLoggedIn() && isEmployee()) {
+if (isLoggedIn() && isEmployee() && !maintenance_is_active()) {
     header('Location: ' . BASE_URL . '/index.php');
     exit;
 }
@@ -139,6 +140,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // submission never produces a "New Applicant" notification.
                 $newApplicantId = (int) db()->lastInsertId();
                 notifyHRofNewApplicant($newApplicantId, $fullName, $job['title']);
+
+                // AUTOMATIC AI resume matching: compare the uploaded CV against
+                // this job right away and store the 0-100 match result for the
+                // applicants list. autoScreenApplicant() never throws and never
+                // blocks submission — on any failure it is recorded as
+                // "Unavailable" and the applicant/application stay intact.
+                try {
+                    autoScreenApplicant($newApplicantId);
+                } catch (Throwable $e) {
+                    error_log('[apply.php] automatic AI screening skipped for applicant_id=' . $newApplicantId . ': ' . $e->getMessage());
+                }
 
                 redirect(BASE_URL . '/public/thank_you.php');
             } else {
@@ -279,6 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/../includes/maintenance_banner.php'; ?>
     <header class="public-header">
         <a href="jobs.php" class="brand" aria-label="TRI-M Global Logistics &amp; Trading Inc. — Jobs">
             <img src="../assets/images/tri-m-logo.png" alt="TRI-M GLOBAL — Logistics &amp; Trading Inc.">
@@ -312,6 +325,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php foreach ($errors as $err): ?>
                     <div><?= e($err) ?></div>
                 <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php
+        require_once __DIR__ . '/../includes/resume_parser.php';
+        $ocrCheck = ocrAvailabilityCheck();
+        if (!$ocrCheck['ok']): ?>
+            <div class="alert alert-warning">
+                <strong>OCR not available on this server.</strong> Uploaded resumes are checked
+                for readable text; resumes saved as images (scanned/photo PDFs) may not be
+                analyzable until Tesseract OCR is installed. <?= e($ocrCheck['reason']) ?>
             </div>
         <?php endif; ?>
 

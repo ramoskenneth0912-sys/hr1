@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/session.php';
+if (!defined('MAINTENANCE_EXEMPT_PAGE')) {
+    define('MAINTENANCE_EXEMPT_PAGE', true);
+}
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/database.php';
 

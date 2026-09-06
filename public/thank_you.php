@@ -118,6 +118,7 @@ require_once __DIR__ . '/../includes/security_headers.php';
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/../includes/maintenance_banner.php'; ?>
     <header class="public-header">
         <a href="jobs.php" class="brand" aria-label="TRI-M Global Logistics &amp; Trading Inc. — Jobs">
             <img src="../assets/images/tri-m-logo.png" alt="TRI-M GLOBAL — Logistics &amp; Trading Inc.">

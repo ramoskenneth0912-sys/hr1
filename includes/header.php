@@ -89,6 +89,9 @@ $notifItems = $notifData['items'];
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/tailwind.css">
 </head>
 <body class="<?= e($bodyClass) ?>">
+<?php
+require __DIR__ . '/maintenance_banner.php';
+?>
 <div class="app-layout<?= $showSidebar ? ' has-sidebar' : '' ?>">
     <?php if ($showSidebar): ?>
     <aside class="sidebar" id="appSidebar">

@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/session.php';
+if (!defined('MAINTENANCE_EXEMPT_PAGE')) {
+    define('MAINTENANCE_EXEMPT_PAGE', true);
+}
 require_once __DIR__ . '/../includes/csrf.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/security_headers.php';
@@ -79,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password — <?= e_rp(APP_NAME) ?></title>
+    <title>Reset Password Ã¢â‚¬â€ <?= e_rp(APP_NAME) ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

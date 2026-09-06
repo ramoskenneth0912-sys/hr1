@@ -9,6 +9,8 @@
 
 declare(strict_types=1);
 
+require_once BASE_PATH . '/includes/ai_screening.php';
+
 class ApplicationsController
 {
     private const ALLOWED_EXT = ['pdf', 'doc', 'docx'];
@@ -274,6 +276,13 @@ class ApplicationsController
         }
 
         $id = (int) db()->lastInsertId();
+
+        // AUTOMATIC AI resume matching: compare the uploaded CV against the job
+        // and store the 0-100 match result. autoScreenApplicant() never throws —
+        // on any failure it records "Unavailable" so the submission itself is
+        // never affected (the clear JSON response below is kept as the promise).
+        autoScreenApplicant($id);
+
         Response::created(self::present(self::findById($id)), 'Application submitted successfully.');
     }
 

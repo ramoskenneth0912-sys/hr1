@@ -79,6 +79,10 @@ require_once __DIR__ . '/controllers/ExamProvisioningController.php';
 // Resolve the current caller before dispatching (API key, Bearer token, or site session).
 Auth::authenticate();
 
+// Maintenance gate (JSON 503). Runs after auth so HR admins — who keep full
+// access by design — are recognized and pass through.
+maintenance_api_block();
+
 $segments = route_path() === '' ? [] : explode('/', route_path());
 $res = $segments[0] ?? null;
 $id1 = isset($segments[1]) && ctype_digit($segments[1]) ? (int) $segments[1] : null;

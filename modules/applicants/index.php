@@ -40,6 +40,13 @@ if (!isset($tabs[$tab])) {
 // Search + filters (validated server-side).
 $q         = trim((string) ($_GET['q'] ?? ''));
 $position  = trim((string) ($_GET['position'] ?? ''));
+$match     = trim((string) ($_GET['match'] ?? ''));
+$sort      = trim((string) ($_GET['sort'] ?? ''));
+
+// Whitelist the AI Match filter and score ordering so arbitrary values
+// can never reach the query string / comparisons.
+$match = in_array($match, ['strong', 'moderate', 'low'], true) ? $match : '';
+$sort  = in_array($sort, ['match_high', 'match_low'], true) ? $sort : '';
 
 // Build the base query with server-side filtering.
 $where  = ['1=1'];
@@ -74,7 +81,7 @@ $ids = array_column($allApplicants, 'id');
 if (!empty($ids)) {
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $sStmt = db()->prepare(
-        "SELECT s.applicant_id, s.overall_score, s.recommendation
+        "SELECT s.applicant_id, s.overall_score, s.recommendation, s.status
          FROM ai_screening s
          INNER JOIN (
              SELECT applicant_id, MAX(id) AS max_id
@@ -208,6 +215,47 @@ if ($tab !== 'all') {
     $applicants = array_values($applicants);
 }
 
+// AI Match filter + score ordering, applied per applicant from the latest
+// ai_screening row. Analyzed rows carry a numeric score; pending / failed /
+// never-screened rows are treated as unscored (filtered out by a match
+// filter and always sorted after scored rows).
+$scored = [];
+foreach ($applicants as $row) {
+    $sc = $screeningMap[$row['id']] ?? null;
+    $score = null;
+    if ($sc && ($sc['status'] ?? '') === 'analyzed') {
+        $score = (int) $sc['overall_score'];
+    }
+    $row['_ai_score']  = $score;
+    $row['_ai_status'] = $sc ? (string) ($sc['status'] ?? 'analyzed') : '';
+    $scored[] = $row;
+}
+
+if ($match !== '') {
+    $scored = array_values(array_filter($scored, function ($row) use ($match) {
+        $score = $row['_ai_score'];
+        if ($score === null) {
+            return false;
+        }
+        return $match === 'strong'
+            ? $score >= 80
+            : ($match === 'moderate' ? ($score >= 60 && $score < 80) : $score < 60);
+    }));
+}
+
+if ($sort !== '') {
+    usort($scored, function ($a, $b) use ($sort) {
+        $na = $a['_ai_score'] ?? null;
+        $nb = $b['_ai_score'] ?? null;
+        if ($na === null && $nb === null) return 0;
+        if ($na === null) return 1;
+        if ($nb === null) return -1;
+        return $sort === 'match_high' ? $nb <=> $na : $na <=> $nb;
+    });
+}
+
+$applicants = $scored;
+
 // Distinct positions for the filter dropdown.
 $distinctPositions = db()->query(
     "SELECT DISTINCT position_applied FROM applicants WHERE position_applied <> '' ORDER BY position_applied"
@@ -217,6 +265,8 @@ $distinctPositions = db()->query(
 $qs = [];
 if ($q !== '')        $qs['q'] = $q;
 if ($position !== '') $qs['position'] = $position;
+if ($match !== '')    $qs['match'] = $match;
+if ($sort !== '')     $qs['sort'] = $sort;
 $filterQuery = http_build_query($qs);
 ?>
 
@@ -261,13 +311,24 @@ $filterQuery = http_build_query($qs);
                 placeholder="Search by name, applicant no., position, or email..."
                 aria-label="Search applicants">
         </div>
-        <select name="position" class="apps-select" aria-label="Filter by position">
+        <select name="position" class="apps-select" aria-label="Filter by position" onchange="this.form.submit()">
             <option value="">All Positions</option>
             <?php foreach ($distinctPositions as $p): ?>
             <option value="<?= e($p) ?>" <?= $position === $p ? 'selected' : '' ?>><?= e($p) ?></option>
             <?php endforeach; ?>
         </select>
-        <?php if ($q !== '' || $position !== ''): ?>
+        <select name="match" class="apps-select" aria-label="Filter by AI match" onchange="this.form.submit()">
+            <option value="">All AI Match</option>
+            <option value="strong" <?= $match === 'strong' ? 'selected' : '' ?>>Strong Match (80+%)</option>
+            <option value="moderate" <?= $match === 'moderate' ? 'selected' : '' ?>>Moderate Match (60-79%)</option>
+            <option value="low" <?= $match === 'low' ? 'selected' : '' ?>>Low Match (0-59%)</option>
+        </select>
+        <select name="sort" class="apps-select" aria-label="Sort by AI match" onchange="this.form.submit()">
+            <option value="">Sort</option>
+            <option value="match_high" <?= $sort === 'match_high' ? 'selected' : '' ?>>AI Match: High to Low</option>
+            <option value="match_low" <?= $sort === 'match_low' ? 'selected' : '' ?>>AI Match: Low to High</option>
+        </select>
+        <?php if ($q !== '' || $position !== '' || $match !== '' || $sort !== ''): ?>
         <a href="index.php?tab=<?= e($tab) ?>" class="btn btn-outline btn-sm">Clear</a>
         <?php endif; ?>
     </form>
@@ -291,7 +352,7 @@ $filterQuery = http_build_query($qs);
         <tbody>
             <?php if (empty($applicants)): ?>
             <tr><td colspan="8" class="empty">
-                <?= $tab !== 'all' || $q !== '' || $position !== ''
+                <?= $tab !== 'all' || $q !== '' || $position !== '' || $match !== '' || $sort !== ''
                     ? 'No applicants match the current filter.'
                     : 'No applicants yet. <a href="create.php">Add the first applicant</a>.' ?>
             </td></tr>
@@ -307,17 +368,25 @@ $filterQuery = http_build_query($qs);
                 </td>
                 <td><?= e($row['position_applied']) ?></td>
                 <td>
-                    <?php if ($sc): ?>
+                    <?php if ($sc && ($sc['status'] ?? '') === 'analyzed'): ?>
                     <span class="ai-score-badge" style="color:<?= $sc['overall_score'] >= 80 ? 'var(--success)' : ($sc['overall_score'] >= 60 ? 'var(--info)' : ($sc['overall_score'] >= 40 ? 'var(--warning)' : 'var(--danger)')) ?>;">
                         <?= (int) $sc['overall_score'] ?>%
                     </span>
+                    <?php elseif ($sc && ($sc['status'] ?? '') === 'pending'): ?>
+                    <span class="text-muted">Analyzing...</span>
+                    <?php elseif ($sc && ($sc['status'] ?? '') === 'failed'): ?>
+                    <span class="text-muted">Unavailable</span>
                     <?php else: ?>
-                    <span class="text-muted">—</span>
+                    <span class="text-muted">Not analyzed</span>
                     <?php endif; ?>
                 </td>
                 <td>
-                    <?php if ($sc): ?>
+                    <?php if ($sc && ($sc['status'] ?? '') === 'analyzed'): ?>
                     <span class="badge <?= $sc['recommendation'] === 'Strong Match' ? 'badge-success' : ($sc['recommendation'] === 'Good Match' ? 'badge-info' : ($sc['recommendation'] === 'Moderate Match' ? 'badge-warning' : 'badge-danger')) ?>"><?= e($sc['recommendation']) ?></span>
+                    <?php elseif ($sc && ($sc['status'] ?? '') === 'pending'): ?>
+                    <span class="badge badge-secondary">Pending Analysis</span>
+                    <?php elseif ($sc && ($sc['status'] ?? '') === 'failed'): ?>
+                    <span class="badge badge-secondary">Unavailable</span>
                     <?php else: ?>
                     <span class="badge badge-secondary">Unscreened</span>
                     <?php endif; ?>
@@ -352,18 +421,17 @@ $filterQuery = http_build_query($qs);
                             ?>
                             <?php
                             // Core actions shown for every applicant (View, Edit).
-                            // "AI Screening" is shown ONLY until it has actually
-                            // been completed. Completion is determined from the
-                            // EXISTING ai_screening record for this applicant
-                            // ($sc, loaded from DB per applicant above) — never
-                            // from browser/session state. Once a screening row
-                            // exists the option is removed entirely so it cannot
-                            // be re-run (reusing HR1's own screening completion
-                            // result; no new status system is introduced).
+                            // "AI Screening" is shown until a screening row EXISTS
+                            // with status 'analyzed' (i.e. a valid server-side result
+                            // is stored). It also reappears when the automatic/ manual
+                            // analysis FAILED so HR can retry. Once analyzed, the option
+                            // is removed entirely so it cannot be re-run (reusing HR1's
+                            // own screening completion result; no new status system is
+                            // introduced).
                             $has('View', 'view.php?id=' . (int) $row['id']);
                             $has('Edit', 'edit.php?id=' . (int) $row['id']);
 
-                            if (!$sc):
+                            if (!$sc || ($sc['status'] ?? '') === 'failed'):
                                 $post('AI Screening', 'screening.php');
                             endif;
                             ?>

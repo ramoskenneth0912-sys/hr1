@@ -428,4 +428,13 @@ function notification_dropdown_html(?int $userId): string
     return $html;
 }
 
+/**
+ * Hybrid maintenance engine — see includes/maintenance.php.
+ * maintenance_check() is the central gate: it runs every time functions.php
+ * loads (which every page in the app requires) and blocks FULL / LIMITED
+ * requests before any protected code executes.
+ */
+require_once __DIR__ . '/maintenance.php';
+maintenance_check();
+
 require_once __DIR__ . '/csrf.php';

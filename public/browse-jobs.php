@@ -3,7 +3,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/security_headers.php';
 
-if (isLoggedIn() && isEmployee()) {
+if (isLoggedIn() && isEmployee() && !maintenance_is_active()) {
     header('Location: ' . BASE_URL . '/index.php');
     exit;
 }
@@ -351,6 +351,7 @@ $icons = [
     </style>
 </head>
 <body>
+<?php require __DIR__ . '/../includes/maintenance_banner.php'; ?>
     <div class="bg-decor" aria-hidden="true"></div>
     <header class="public-header">
         <a href="<?= BASE_URL ?>/public/jobs.php" class="brand" aria-label="TRI-M Global Logistics &amp; Trading Inc. — Home">
