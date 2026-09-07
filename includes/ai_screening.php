@@ -70,6 +70,13 @@ function getSynonymGroups(): array
         'help desk' => ['helpdesk', 'technical support', 'it support', 'service desk'],
         'networking' => ['network administration', 'network management', 'lan wan'],
         'troubleshooting' => ['technical troubleshooting', 'fault diagnosis', 'issue resolution'],
+        'reliable' => ['reliability', 'rely', 'dependable', 'dependability', 'dependably', 'trustworthy', 'trustworthiness'],
+        'character' => ['integrity', 'ethics', 'ethical', 'honesty', 'honest', 'values', 'disposition', 'conduct'],
+        'moral' => ['ethical', 'ethics', 'integrity', 'honesty', 'values', 'character', 'disposition'],
+        'attention' => ['alertness', 'attentiveness', 'observant', 'vigilance', 'vigilant', 'watchful'],
+        'observation' => ['observational', 'vigilance', 'alertness', 'surveillance', 'monitoring'],
+        'willing' => ['able', 'prepared', 'ready', 'available'],
+        'fit' => ['physically fit', 'physical fitness', 'in good health', 'healthy'],
     ];
 }
 
@@ -170,8 +177,117 @@ function extractItems(string $text): array
 }
 
 /**
+ * Light morphological stemmer so inflectional variants share a root
+ * ("reliability"/"reliable", "completed"/"complete", "security"/"secure").
+ */
+function wordRoot(string $word): string
+{
+    $w = strtolower(trim(preg_replace('/[^a-zA-Z0-9]/', '', $word)));
+    if ($w === '' || strlen($w) < 4) {
+        return $w;
+    }
+    $w = preg_replace('/(ingly|ings|edly|ers|ments|ness|ment|ing|ly|ies|ied|es|ed|er|ity|ties|ty|s)$/', '', $w);
+    if (strlen($w) >= 5 && substr($w, -1) === 'e') {
+        $w = substr($w, 0, -1);
+    }
+    if (strlen($w) >= 6) {
+        $w = substr($w, 0, 6);
+    }
+    return $w;
+}
+
+/**
+ * Low-signal words that add no matching power to a requirement item.
+ * They are excluded when computing token coverage so connective/soft
+ * language ("willing", "required", "at least", "completed") cannot fail a
+ * requirement whose real content is present in the resume.
+ */
+function requirementFillerWords(): array
+{
+    return [
+        'a', 'an', 'and', 'or', 'of', 'the', 'to', 'in', 'with', 'for', 'on',
+        'at', 'by', 'from', 'as', 'be', 'is', 'are', 'was', 'were', 'has',
+        'have', 'had', 'having', 'do', 'does', 'did',
+        'able', 'willing', 'good', 'strong', 'excellent', 'proficient', 'basic',
+        'must', 'shall', 'should', 'can', 'may', 'will',
+        'required', 'completed', 'completion', 'equivalent', 'least',
+        'preferred', 'preferably', 'relevant', 'related', 'per', 'such',
+        'other', 'etc', 'like', 'possess', 'possessing', 'demonstrated',
+    ];
+}
+
+/**
+ * Decide whether a single requirement (content) token is present in the
+ * resume. Checks in order: exact word, stem-equivalent word, then per-token
+ * synonym expansion (if the token belongs to a synonym group, any of the
+ * group's other forms may satisfy it).
+ */
+function requirementTokenFound(string $token, string $resumeNormalized, array $resumeTokenSet): bool
+{
+    $t = normalizeText($token);
+    if ($t === '' || mb_strlen($t) < 2) {
+        return false;
+    }
+
+    if (isset($resumeTokenSet[$t]) || synonymFormPresent($t, $resumeNormalized)) {
+        return true;
+    }
+
+    $stem = wordRoot($t);
+    if (strlen($stem) >= 5) {
+        foreach ($resumeTokenSet as $resumeToken => $_) {
+            if (is_int($resumeToken)) {
+                continue;
+            }
+            if (strpos($resumeToken, ' ') !== false) {
+                continue;
+            }
+            if (wordRoot($resumeToken) === $stem) {
+                return true;
+            }
+        }
+    }
+
+    $synonyms = getSynonymGroups();
+    foreach ($synonyms as $canonical => $variants) {
+        $allForms = array_merge([$canonical], $variants);
+        $member = false;
+        foreach ($allForms as $form) {
+            if (normalizeText($form) === $t) {
+                $member = true;
+                break;
+            }
+        }
+        if (!$member) {
+            continue;
+        }
+        foreach ($allForms as $form) {
+            $formNorm = normalizeText($form);
+            if ($formNorm === '' || $formNorm === $t) {
+                continue;
+            }
+            if (isset($resumeTokenSet[$formNorm]) || synonymFormPresent($formNorm, $resumeNormalized)) {
+                return true;
+            }
+            if (strlen(wordRoot($formNorm)) >= 5) {
+                foreach ($resumeTokenSet as $resumeToken => $_) {
+                    if (is_int($resumeToken) || strpos((string) $resumeToken, ' ') !== false) {
+                        continue;
+                    }
+                    if (wordRoot((string) $resumeToken) === wordRoot($formNorm)) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+/**
  * Check if a single requirement item is found in the resume text.
- * Uses both exact substring matching and synonym-aware matching.
+ * Uses exact substring matching, fuzzy token coverage, and synonym matching.
  *
  * Returns [bool $found, string $reason]
  */
@@ -188,18 +304,31 @@ function matchRequirement(string $requirement, string $resumeNormalized, array $
         return [true, 'Direct match found in resume'];
     }
 
-    // Token-based: check if all significant words of the requirement appear
-    $reqTokens = tokenize($requirement);
-    $significantTokens = array_filter($reqTokens, fn($t) => mb_strlen($t) > 2);
-    if (count($significantTokens) > 0) {
+    // Token-based: check coverage of significant (non-filler) tokens using
+    // stem + synonym-aware matching. Threshold adapts so small requirement
+    // items tolerate one dangling word without inflating false negatives.
+    $contentTokens = [];
+    $fillers = requirementFillerWords();
+    foreach (tokenize($requirement) as $token) {
+        if (mb_strlen($token) < 2) {
+            continue;
+        }
+        if (in_array($token, $fillers, true)) {
+            continue;
+        }
+        $contentTokens[] = $token;
+    }
+    if (count($contentTokens) > 0) {
         $foundCount = 0;
-        foreach ($significantTokens as $token) {
-            if (isset($resumeTokenSet[$token]) || mb_strpos($resumeNormalized, $token) !== false) {
+        foreach ($contentTokens as $token) {
+            if (requirementTokenFound($token, $resumeNormalized, $resumeTokenSet)) {
                 $foundCount++;
             }
         }
-        $ratio = $foundCount / count($significantTokens);
-        if ($ratio >= 0.8) {
+        $total = count($contentTokens);
+        $ratio = $foundCount / $total;
+        $threshold = $total <= 3 ? max(0.6, ($total - 1) / $total) : 0.8;
+        if ($ratio >= $threshold) {
             return [true, 'Key terms matched in resume'];
         }
     }
@@ -456,6 +585,8 @@ function degreeLevelFoundInResume(string $levelKey, string $haystackNormalized):
         'diploma'    => ['diploma'],
         'certificate'=> ['certificate', 'certification', 'certified'],
         'license'    => ['license', 'licensure', 'licensed'],
+        'highschool'    => ['high school', 'senior high school', 'junior high school', 'secondary', 'secondary education', 'shs', 'highschool', 'high school diploma', 'grade 12'],
+        'vocational'    => ['vocational', 'technical vocational', 'tech voc', 'trade school', 'tesda', 'technical education', 'technical school'],
     ];
 
     $forms = $formMap[$levelKey] ?? [$levelKey];
@@ -477,7 +608,7 @@ function degreeLevelsInText(string $text): array
 {
     $norm = normalizeText($text);
     $levels = [];
-    foreach (['bachelor', 'master', 'doctorate', 'associate', 'diploma', 'certificate', 'license'] as $key) {
+    foreach (['bachelor', 'master', 'doctorate', 'associate', 'diploma', 'certificate', 'license', 'highschool', 'vocational'] as $key) {
         if (degreeLevelFoundInResume($key, $norm)) {
             $levels[] = $key;
         }
@@ -581,7 +712,8 @@ function matchEducationItem(string $item, string $resumeNormalized): array
         }
     }
 
-    $reqFields = degreeFieldsIn($item);
+    $simpleLevel = count(array_intersect($levels, ['highschool', 'vocational'])) > 0;
+    $reqFields = $simpleLevel ? [] : degreeFieldsIn($item);
     $fieldOk = count($reqFields) === 0;
     if (!$fieldOk) {
         $resumeFields = resumeDegreeFields($resumeNormalized);
@@ -1262,17 +1394,21 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
     // Extract resume text
     $resumeText = '';
     $resumePath = $applicant['resume_path'] ?? '';
+    $resumeAbsPath = '';
     if ($resumePath !== '') {
-        $fullPath = dirname(__DIR__) . '/' . ltrim($resumePath, '/');
-        if (file_exists($fullPath)) {
-            $resumeText = extractResumeText($fullPath);
+        $resumeAbsPath = dirname(__DIR__) . '/' . ltrim($resumePath, '/');
+        if (file_exists($resumeAbsPath)) {
+            $resumeText = extractResumeText($resumeAbsPath);
         }
     }
 
     if (trim($resumeText) === '') {
-        return [
-            'error' => 'Unable to analyze this resume. Please upload a clear PDF, DOC, or DOCX file.',
-        ];
+        $diag = diagnoseResumeReadFailure($resumeAbsPath, '');
+        $message = $diag['reason'] ?: 'Unable to analyze this resume. Please upload a clear PDF, DOC, or DOCX file.';
+        if (!empty($diag['hint'])) {
+            $message .= ' ' . $diag['hint'];
+        }
+        return ['error' => $message];
     }
 
     // Run the configured provider (local engine by default).

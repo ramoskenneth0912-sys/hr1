@@ -12,6 +12,8 @@
  * Usage (from the project root):
  *   php database/ai_screen_backfill.php                 -> screen everyone lacking a result
  *   php database/ai_screen_backfill.php --dry-run       -> preview who would be screened
+ *   php database/ai_screen_backfill.php --retry-failed  -> re-run everyone whose last screening failed
+ *   php database/ai_screen_backfill.php --re-run        -> re-run everyone whose last screening was analyzed
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -23,19 +25,54 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/ai_screening.php';
 
 $dryRun = in_array('--dry-run', $argv, true);
+$retryFailed = in_array('--retry-failed', $argv, true);
+$reRun = in_array('--re-run', $argv, true);
 
-$stmt = db()->prepare(
-    'SELECT a.id, a.applicant_no, a.first_name, a.last_name, a.position_applied
-     FROM applicants a
-     LEFT JOIN ai_screening s ON s.applicant_id = a.id
-     WHERE s.id IS NULL
-     ORDER BY a.id'
-);
+if ($retryFailed) {
+    // Re-run screening for every applicant whose LAST screening result was
+    // 'failed' (unreadable resume). Useful after a parser/OCR fix.
+    $stmt = db()->prepare(
+        'SELECT a.id, a.applicant_no, a.first_name, a.last_name, a.position_applied
+         FROM applicants a
+         WHERE EXISTS (
+             SELECT 1 FROM ai_screening s
+             WHERE s.applicant_id = a.id
+               AND s.status = \'failed\'
+               AND s.id = (SELECT MAX(s2.id) FROM ai_screening s2 WHERE s2.applicant_id = a.id)
+         )
+         ORDER BY a.id'
+    );
+} elseif ($reRun) {
+    // Re-run screening for every applicant whose LAST screening result was
+    // 'analyzed'. Useful after a matching-logic fix so stored scores reflect
+    // the improved engine without touching missing/failed applicants.
+    $stmt = db()->prepare(
+        'SELECT a.id, a.applicant_no, a.first_name, a.last_name, a.position_applied
+         FROM applicants a
+         WHERE EXISTS (
+             SELECT 1 FROM ai_screening s
+             WHERE s.applicant_id = a.id
+               AND s.status = \'analyzed\'
+               AND s.id = (SELECT MAX(s2.id) FROM ai_screening s2 WHERE s2.applicant_id = a.id)
+         )
+         ORDER BY a.id'
+    );
+} else {
+    // Default: applicants with NO screening result at all.
+    $stmt = db()->prepare(
+        'SELECT a.id, a.applicant_no, a.first_name, a.last_name, a.position_applied
+         FROM applicants a
+         LEFT JOIN ai_screening s ON s.applicant_id = a.id
+         WHERE s.id IS NULL
+         ORDER BY a.id'
+    );
+}
 $stmt->execute();
 $pending = $stmt->fetchAll();
 
 $count = count($pending);
-echo ($dryRun ? '[DRY-RUN] ' : '') . "Applicants without an AI screening result: {$count}\n";
+$label = $retryFailed ? 'Applicants whose last screening failed' : ($reRun ? 'Applicants whose last screening was analyzed' : 'Applicants without an AI screening result');
+echo ($dryRun ? '[DRY-RUN] ' : '') . "{$label}: {$count}\n";
 echo str_repeat('-', 70) . "\n";
 
 $analyzed = 0;

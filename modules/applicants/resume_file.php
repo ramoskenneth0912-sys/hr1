@@ -42,10 +42,16 @@ if (empty($applicant['resume_path'])) {
 $baseDir = dirname(__DIR__, 2); // project root
 $uploadsRoot = realpath($baseDir . '/uploads');
 
-// Stored values vary: bare filename ("APP00003_resume.pdf") or
-// "uploads/APP00003_resume.pdf". Normalize to a path under /uploads.
+// Stored values vary: bare filename ("APP00003_resume.pdf"),
+// "uploads/APP00003_resume.pdf", or "uploads/api_resumes/APP003_xxx.pdf".
+// Normalize to a path under /uploads, preserving the subdirectory so API
+// uploads (stored under uploads/api_resumes) are found too. Traversal is
+// still blocked by the realpath() confinement check below.
 $relative = str_replace('\\', '/', ltrim((string) $applicant['resume_path'], '/'));
-$relative = basename($relative); // strip any directory component
+if (str_starts_with($relative, 'uploads/')) {
+    $relative = substr($relative, strlen('uploads/'));
+}
+$relative = ltrim($relative, '/');
 if (!$uploadsRoot) {
     http_response_code(404);
     exit('File storage is unavailable.');

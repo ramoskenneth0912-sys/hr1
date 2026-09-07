@@ -77,6 +77,78 @@ function extractResumeText(string $filePath): string
 }
 
 /**
+ * Diagnose why a resume could not be read, for the AI screening error path.
+ * Separates the common failure causes so admin-facing errors are actionable
+ * instead of the generic "unable to analyze" message.
+ *
+ * @return array{ok: bool, reason: string, hint: string}
+ */
+function diagnoseResumeReadFailure(string $filePath, string $extractedText = ''): array
+{
+    if ($filePath === '') {
+        return [
+            'ok'     => false,
+            'reason' => 'No resume file is attached to this applicant.',
+            'hint'   => 'Ask the applicant to re-upload their CV, or attach a PDF/DOC/DOCX manually.',
+        ];
+    }
+
+    if (!file_exists($filePath)) {
+        return [
+            'ok'     => false,
+            'reason' => 'The stored resume file could not be found on the server.',
+            'hint'   => 'Check that uploads/' . basename($filePath) . ' exists and the applicant record has the correct resume path.',
+        ];
+    }
+
+    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    $supported = ['pdf', 'doc', 'docx'];
+    if (!in_array($ext, $supported, true)) {
+        return [
+            'ok'     => false,
+            'reason' => 'The resume has an unsupported file type "' . ($ext ?: 'none') . '".',
+            'hint'   => 'Only PDF, DOC, and DOCX files can be analyzed. Ask the applicant to re-upload in a supported format.',
+        ];
+    }
+
+    if (trim($extractedText) !== '') {
+        return ['ok' => true, 'reason' => '', 'hint' => ''];
+    }
+
+    // Text extraction returned empty for a supported file type.
+    switch ($ext) {
+        case 'pdf':
+            $ocr = ocrAvailabilityCheck();
+            if (!$ocr['ok']) {
+                return [
+                    'ok'     => false,
+                    'reason' => 'The PDF could not be read as text, and OCR is not available on this server.',
+                    'hint'   => $ocr['hint'] . ' Scanned or image-only PDFs need Tesseract OCR to be readable.',
+                ];
+            }
+            return [
+                'ok'     => false,
+                'reason' => 'The PDF appears to contain no readable text, or uses an unsupported encoding.',
+                'hint'   => 'If this is a scanned/image-only PDF, enable OCR. Otherwise ask the applicant to re-export as a plain text PDF.',
+            ];
+        case 'doc':
+            return [
+                'ok'     => false,
+                'reason' => 'The legacy .doc file could not be converted to text.',
+                'hint'   => 'Install antiword/catdoc, or ask the applicant to re-save in .docx or .pdf format.',
+            ];
+        case 'docx':
+            return [
+                'ok'     => false,
+                'reason' => 'The .docx file could not be parsed as text.',
+                'hint'   => 'The file may be corrupt or password-protected. Ask the applicant to re-save and re-upload.',
+            ];
+        default:
+            return ['ok' => false, 'reason' => 'Unknown read failure.', 'hint' => ''];
+    }
+}
+
+/**
  * Extract text from a DOCX file by parsing the inner XML.
  */
 function extractDocx(string $filePath): string
@@ -328,8 +400,12 @@ function extractPdfTextStreams(string $raw): string
     // Method 1: Extract text between BT and ET markers (uncompressed content)
     $text .= extractTextFromPdfContent($raw);
 
-    // Method 2: decode /FlateDecode and /ASCII85Decode streams and parse them
-    if (preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $streams, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+    // Method 2: decode /FlateDecode and /ASCII85Decode streams and parse them.
+    // The newline before `endstream` is optional: some generators (e.g.
+    // ReportLab-based resume builders) emit `...~>endstream` on one line with
+    // NO newline separating the ASCII85 terminator from the keyword. Requiring
+    // `\r?\n` there silently skips those streams and leaves resumes unreadable.
+    if (preg_match_all('/stream\r?\n(.*?)(?:\r?\n)?endstream/s', $raw, $streams, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
         foreach ($streams as $streamMatch) {
             $payload = $streamMatch[1][0];
             $fullOffset = $streamMatch[0][1];
