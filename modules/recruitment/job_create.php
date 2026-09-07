@@ -13,16 +13,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employmentType = trim((string) ($_POST['job_employment_type'] ?? ''));
     $workLocation = trim((string) ($_POST['work_location'] ?? ''));
     $vacancies = (int) ($_POST['vacancies'] ?? 1);
-    $postedDate = trim((string) ($_POST['posted_date'] ?? ''));
     $closingDate = trim((string) ($_POST['closing_date'] ?? ''));
-    $status = $_POST['status'] ?? 'draft';
+    $status = $_POST['status'] ?? 'open';
     $qualifications = trim((string) ($_POST['qualifications'] ?? ''));
     $requiredSkills = trim((string) ($_POST['required_skills'] ?? ''));
     $educationReq = trim((string) ($_POST['education_requirement'] ?? ''));
     $experienceReq = trim((string) ($_POST['experience_requirement'] ?? ''));
 
     $employmentTypes = ['regular', 'contractual', 'probationary', 'part_time', 'internship'];
-    $statuses = ['draft', 'open', 'closed', 'filled'];
+    $statuses = ['open', 'closed'];
 
     $validationErrors = [];
 
@@ -47,9 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($vacancies < 1) {
         $validationErrors[] = 'Vacancies must be at least 1.';
     }
-    if ($postedDate === '') {
-        $validationErrors[] = 'Posted date is required.';
-    }
     if ($closingDate === '') {
         $validationErrors[] = 'Closing date is required.';
     }
@@ -57,8 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $validationErrors[] = 'Invalid status value.';
     }
 
-    // Scheduled/future posting dates + Closing must not precede Posted.
-    $validationErrors = array_merge($validationErrors, validateDateRange($postedDate, $closingDate, true));
+    // Closing must be a scheduled/future date.
+    $validationErrors = array_merge($validationErrors, validateDateRange(null, $closingDate, true));
 
     if (!$validationErrors) {
         $jobCode = generateCode('JOB', 'job_postings', 'job_code');
@@ -75,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $description,
             $vacancies,
             $status,
-            $postedDate ?: null,
+            date('Y-m-d'),
             $closingDate ?: null,
             $qualifications,
             $requiredSkills,
@@ -150,15 +146,10 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-group">
             <label for="status">Status</label>
             <select id="status" name="status">
-                <?php foreach (['draft','open','closed','filled'] as $s): ?>
-                <option value="<?= $s ?>" <?= ($_POST['status'] ?? 'draft') === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
+                <?php foreach (['open','closed'] as $s): ?>
+                <option value="<?= $s ?>" <?= ($_POST['status'] ?? 'open') === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
                 <?php endforeach; ?>
             </select>
-        </div>
-        <div class="form-group">
-            <label for="posted_date">Posted/Start Date *</label>
-            <input type="date" id="posted_date" name="posted_date"
-                   value="<?= e($_POST['posted_date'] ?? date('Y-m-d')) ?>" min="<?= date('Y-m-d') ?>" required>
         </div>
         <div class="form-group">
             <label for="closing_date">Application Closing Date *</label>

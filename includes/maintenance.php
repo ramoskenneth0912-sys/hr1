@@ -34,16 +34,8 @@ if (!defined('BASE_PATH')) {
  */
 if (!defined('MAINTENANCE_MODULE_DEFS')) {
     define('MAINTENANCE_MODULE_DEFS', [
-        'jobs'        => ['label' => 'Jobs (Public Careers & Apply)',   'path' => '/public/'],
-        'recruitment' => ['label' => 'Recruitment',                     'path' => '/modules/recruitment/'],
-        'applicants'  => ['label' => 'Applicants',                      'path' => '/modules/applicants/'],
-        'employee'    => ['label' => 'Employee Portal (Employee)',      'path' => '/modules/employee/'],
-        'onboarding'  => ['label' => 'Onboarding',                      'path' => '/modules/onboarding/'],
-        'hcm'         => ['label' => 'Core HCM',                        'path' => '/modules/hcm/'],
-        'records'     => ['label' => 'Records',                         'path' => '/modules/records/'],
-        'applicant'   => ['label' => 'Applicant Portal',                'path' => '/modules/applicant/'],
-        'users'       => ['label' => 'Users',                           'path' => '/modules/users/'],
-        'settings'    => ['label' => 'Settings',                        'path' => '/modules/settings/'],
+        'jobs'     => ['label' => 'Jobs (Public Careers & Apply)',  'path' => '/public/'],
+        'employee' => ['label' => 'Employee Portal (Employee)',     'path' => '/modules/employee/'],
     ]);
 }
 
