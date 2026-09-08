@@ -21,6 +21,15 @@
  *
  * All aggregation is done in SQL with COUNT + GROUP BY over applicants,
  * grouped by the actual application submission date (applicants.applied_date).
+ *
+ * MODE
+ *   view=funnel  : returns a current-MONTH-ONLY recruitment funnel
+ *                  (Applied / Screen / Passed / Hired) instead of the
+ *                  period series. The current month is resolved dynamically
+ *                  from the application timezone (system_settings.timezone,
+ *                  default Asia/Manila). This powers the "Recruitment
+ *                  Overview" compact card. All inputs are ignored except for
+ *                  the optional position filter.
  */
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/security_log.php';
@@ -68,6 +77,99 @@ try {
         $position = '';
     }
 
+    // ---- Timezone (application-configured, default Asia/Manila) -----------
+    $appTimezone = 'Asia/Manila';
+    try {
+        $tzRow = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'timezone' LIMIT 1")->fetch();
+        if ($tzRow && !empty($tzRow['setting_value'])) {
+            $appTimezone = $tzRow['setting_value'];
+        }
+    } catch (Throwable $e) {
+        // fall back to the default above
+    }
+
+    // ---- Current-month-only recruitment funnel ----------------------------
+    // Used by the "Recruitment Overview" compact card. The current month is
+    // resolved dynamically from the application timezone — never hard-coded.
+    $view = strtolower((string) ($_GET['view'] ?? ''));
+    if ($view === 'funnel') {
+        $tz = new DateTimeZone($appTimezone);
+        $now = new DateTimeImmutable('now', $tz);
+
+        // Optional month selector (YYYY-MM, e.g. "2026-09"). Defaults to the
+        // current month — derived dynamically from the app timezone, never hard-coded.
+        $monthInput = (string) ($_GET['month'] ?? '');
+        $currentYm  = $now->format('Y-m');
+        if ($monthInput !== '' && preg_match('/^\d{4}-\d{2}$/', $monthInput)) {
+            $selYm = $monthInput;
+        } else {
+            $selYm = $currentYm;
+        }
+
+        // Inclusive start of the selected month and exclusive start of the next.
+        $monthStart = $selYm . '-01 00:00:00';
+        $monthNext  = (new DateTimeImmutable($monthStart, $tz))->modify('first day of next month')->format('Y-m-01 00:00:00');
+        $monthLabel = mb_strtoupper(date('M Y', strtotime($monthStart)));   // e.g. "SEP 2026"
+
+        // Funnel stage → current-status set. Passed excludes the still-in-screening
+        // group; Screen is intentionally omitted from the compact funnel.
+        $stages = [
+            [
+                'name'   => 'Applied',
+                'status' => 'ALL',
+            ],
+            [
+                'name'   => 'Passed',
+                'status' => "('shortlisted','passed_screening','accepted','interview','offered','hired')",
+            ],
+            [
+                'name'   => 'Hired',
+                'status' => "('hired')",
+            ],
+        ];
+
+        $counts = [];
+        foreach ($stages as $stage) {
+            if ($stage['status'] === 'ALL') {
+                // Applied = applications submitted during the current month.
+                $sql = 'SELECT COUNT(*) FROM applicants
+                        WHERE applied_date >= ? AND applied_date < ?';
+                $paramsF = [$monthStart, $monthNext];
+            } else {
+                // Downstream stages: an applicant's current status reflects how
+                // far they have progressed; updated_at is the best available
+                // proxy for when that progression happened. No stage-history
+                // table exists, so we attribute the stage to the month of the
+                // record's last status change.
+                $sql = 'SELECT COUNT(*) FROM applicants
+                        WHERE status IN ' . $stage['status'] . '
+                          AND updated_at >= ? AND updated_at < ?';
+                $paramsF = [$monthStart, $monthNext];
+            }
+            if ($position !== '') {
+                $sql .= ' AND position_applied = ?';
+                $paramsF[] = $position;
+            }
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($paramsF);
+            $counts[] = [
+                'name'  => $stage['name'],
+                'count' => (int) $stmt->fetchColumn(),
+            ];
+        }
+
+        echo json_encode([
+            'ok'          => true,
+            'view'        => 'funnel',
+            'month'       => $selYm,
+            'is_current'  => $selYm === $currentYm,
+            'month_label' => $monthLabel,
+            'month_start' => $monthStart,
+            'stage'       => $counts,
+        ]);
+        exit;
+    }
+
     // ---- Build the WHERE clause (all values bound / whitelisted) -----------
     $where  = ' WHERE 1=1';
     $params = [];
@@ -80,29 +182,45 @@ try {
         $params[] = $position;
     }
 
-    // ---- Aggregated series ------------------------------------------------
+    // ---- Aggregated series (recruitment funnel per period) ----------------
+    // The funnel stages are cumulative — an applicant counts toward every stage
+    // they have reached. 'applied' is the whole pool; the rest are status-based.
+    $stageSql = [
+        'applied' => '1 = 1',
+        'screen'  => "status IN ('screening','shortlisted','passed_screening','accepted','interview','offered','hired')",
+        'passed'  => "status IN ('shortlisted','passed_screening','accepted','interview','offered','hired')",
+        'hired'   => "status IN ('hired')",
+    ];
+
     switch ($period) {
         case 'daily':
-            $sql = "SELECT applied_date AS bucket, COUNT(*) AS cnt
-                    FROM applicants $where GROUP BY applied_date ORDER BY applied_date ASC";
+            $bucketExpr = 'applied_date';
             $format = 'Y-m-d';
             break;
         case 'yearly':
-            $sql = "SELECT YEAR(applied_date) AS bucket, COUNT(*) AS cnt
-                    FROM applicants $where GROUP BY YEAR(applied_date) ORDER BY bucket ASC";
+            $bucketExpr = 'YEAR(applied_date)';
             $format = 'Y';
             break;
         default: // monthly
-            $sql = "SELECT DATE_FORMAT(applied_date, '%Y-%m') AS bucket, COUNT(*) AS cnt
-                    FROM applicants $where GROUP BY DATE_FORMAT(applied_date, '%Y-%m') ORDER BY bucket ASC";
+            $bucketExpr = "DATE_FORMAT(applied_date, '%Y-%m')";
             $format = 'Y-m';
             break;
     }
-    $stmt  = $pdo->prepare($sql);
+
+    $selectParts = ["$bucketExpr AS bucket"];
+    foreach ($stageSql as $key => $expr) {
+        $selectParts[] = "SUM(CASE WHEN $expr THEN 1 ELSE 0 END) AS $key";
+    }
+    $sql = 'SELECT ' . implode(', ', $selectParts) . " FROM applicants $where GROUP BY $bucketExpr ORDER BY bucket ASC";
+    $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $seriesRows = $stmt->fetchAll();
 
-    [$labels, $values] = buildSeries($seriesRows, $period, $format, $year, count($params) > 0 && $period !== 'yearly');
+    [$labels, $series] = buildSeries(
+        $seriesRows, $period, $format, $year,
+        count($params) > 0 && $period !== 'yearly',
+        array_keys($stageSql)
+    );
 
     // ---- Summary statistics ------------------------------------------------
     $totalSql = "SELECT COUNT(*) FROM applicants $where";
@@ -156,6 +274,7 @@ try {
     $mpWhere  = ' WHERE 1=1';
     $mpParams = [];
     if ($period !== 'yearly') { $mpWhere .= ' AND YEAR(applied_date) = ?'; $mpParams[] = $year; }
+    if ($position !== '') { $mpWhere .= ' AND position_applied = ?'; $mpParams[] = $position; }
     $mpr = $pdo->prepare(
         "SELECT position_applied, COUNT(*) AS c FROM applicants $mpWhere
          GROUP BY position_applied ORDER BY COUNT(*) DESC, position_applied ASC LIMIT 1"
@@ -172,7 +291,13 @@ try {
         'range'     => ['min' => $minDate, 'max' => $maxDate],
         'total'     => $total,
         'labels'    => $labels,
-        'values'    => $values,
+        'values'    => $series['applied'],
+        'series'    => [
+            ['name' => 'Applied', 'values' => $series['applied']],
+            ['name' => 'Screen',  'values' => $series['screen']],
+            ['name' => 'Passed',  'values' => $series['passed']],
+            ['name' => 'Hired',   'values' => $series['hired']],
+        ],
         'peak'      => [
             'day'    => $peakDay['label'] ? ['label' => $peakDay['label'], 'count' => $peakDay['count']] : null,
             'month'  => $peakMonth['label'] ? ['label' => $peakMonth['label'], 'count' => $peakMonth['count']] : null,
@@ -195,11 +320,15 @@ try {
  * Turn aggregated rows into a continuous, gap-free series with human-readable
  * labels. Daily/monthly produce every bucket in range; yearly every year.
  */
-function buildSeries(array $rows, string $period, string $format, int $year, bool $inRange): array
+function buildSeries(array $rows, string $period, string $format, int $year, bool $inRange, array $seriesKeys): array
 {
     $map = [];
     foreach ($rows as $r) {
-        $map[(string) $r['bucket']] = (int) $r['cnt'];
+        $bucket = (string) $r['bucket'];
+        $map[$bucket] = [];
+        foreach ($seriesKeys as $key) {
+            $map[$bucket][$key] = (int) ($r[$key] ?? 0);
+        }
     }
 
     $keys = [];
@@ -226,12 +355,15 @@ function buildSeries(array $rows, string $period, string $format, int $year, boo
     }
 
     $labels = [];
-    $values = [];
+    $series = array_fill_keys($seriesKeys, []);
     foreach ($keys as $k) {
         $labels[] = formatLabel($k, $period);
-        $values[] = $map[$k] ?? 0;
+        $row = $map[$k] ?? [];
+        foreach ($seriesKeys as $key) {
+            $series[$key][] = $row[$key] ?? 0;
+        }
     }
-    return [$labels, $values];
+    return [$labels, $series];
 }
 
 function formatLabel(string $key, string $period): string

@@ -153,7 +153,7 @@ if (isHRorManager()) {
     </div>
 </div>
 
-<!-- ===================== Applicant Statistics ===================== -->
+<!-- ===================== Applicant Statistics — Graph 1 ===================== -->
 <section class="panel applicant-stats fade-in-up" style="animation-delay:.4s" aria-label="Applicant Statistics">
     <div class="panel-header">
         <div>
@@ -181,11 +181,43 @@ if (isHRorManager()) {
         </div>
     </form>
 
-    <div class="stats-summary" id="statsSummary" hidden></div>
+    <div class="stats-insights" id="statsInsights">
+        <div class="stats-insight-card">
+            <span class="stats-insight-label">Peak Application Month</span>
+            <span class="stats-insight-value" id="insightPeakMonth">No data</span>
+            <span class="stats-insight-sub" id="insightPeakMonthSub"></span>
+        </div>
+        <div class="stats-insight-card">
+            <span class="stats-insight-label">Most Applied Job</span>
+            <span class="stats-insight-value" id="insightTopJob">No data</span>
+            <span class="stats-insight-sub" id="insightTopJobSub"></span>
+        </div>
+    </div>
 
     <div class="stats-chart-wrap" id="statsChartWrap"></div>
 
     <div class="stats-state" id="statsState" hidden></div>
+</section>
+
+<!-- ===================== Recruitment Overview — current month ===================== -->
+<section class="panel applicant-stats fade-in-up" style="animation-delay:.45s" aria-label="Recruitment Overview">
+    <div class="panel-header recruit-head">
+        <div>
+            <h2>Recruitment Overview</h2>
+            <p class="panel-desc" id="recruitSubtitle">Current month recruitment funnel.</p>
+        </div>
+        <div class="recruit-month" id="recruitMonthWrap">
+            <button type="button" class="recruit-month-trigger" id="recruitMonthBtn"
+                    aria-haspopup="listbox" aria-expanded="false">
+                <span id="recruitMonthLabel">…</span>
+                <span class="recruit-month-arrow" aria-hidden="true"></span>
+            </button>
+            <ul class="recruit-month-menu" id="recruitMonthMenu" role="listbox"
+                aria-label="Select recruitment month" hidden></ul>
+        </div>
+    </div>
+
+    <div class="recruit-funnel" id="recruitFunnel"></div>
 </section>
 
 <style>
@@ -198,23 +230,18 @@ if (isHRorManager()) {
 .stats-field { min-width: 120px; }
 .stats-field select { min-width: 120px; }
 .stats-field-job select { min-width: 200px; }
-.stats-summary { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem; }
-.stats-summary-item {
-    flex: 1 1 160px; background: var(--bg); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: .75rem 1rem;
+.stats-chart-wrap {
+    position: relative; width: 100%;
+    background: var(--sidebar-bg);
+    border: 1px solid rgba(255, 255, 255, .05);
+    border-radius: var(--radius-sm);
+    padding: 1.15rem 1rem .7rem;
+    box-shadow: 0 16px 34px -20px rgba(21, 21, 33, .55);
 }
-.stats-summary-item .stats-summary-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-.stats-summary-item .stats-summary-value { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin-top: .15rem; }
-.stats-summary-item .stats-summary-sub { font-size: .78rem; color: var(--muted); }
-.stats-chart-wrap { position: relative; width: 100%; }
 .stats-chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
-.stats-chart-wrap .stats-bar { transition: fill .15s ease; }
-.stats-bar-value {
-    position: absolute; z-index: 11; pointer-events: none; transform: translateX(-50%);
-    font-size: .78rem; font-weight: 700; color: var(--purple-dark);
-}
-.stats-bar-value[hidden] { display: none; }
+.stats-chart-wrap .stats-bar { transition: fill .15s ease, fill-opacity .15s ease; }
 .stats-state { padding: 2rem 1rem; text-align: center; color: var(--muted); font-size: .9rem; background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.stats-loading { padding: .4rem 0 .2rem; text-align: center; color: var(--sidebar-text); font-size: .85rem; }
 .stats-tooltip {
     position: absolute; z-index: 10; pointer-events: none; transform: translate(-50%, -130%);
     background: var(--text-dark); color: #fff; border-radius: 6px; padding: .35rem .6rem;
@@ -223,6 +250,145 @@ if (isHRorManager()) {
 .stats-tooltip strong { display: block; font-weight: 600; }
 .stats-tooltip[hidden] { display: none; }
 
+/* ---- Applicant statistics compact insight cards ---- */
+.stats-insights {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: .9rem;
+    margin-bottom: 1.25rem;
+}
+.stats-insight-card {
+    background: var(--sidebar-bg);
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: var(--radius-sm);
+    padding: .85rem 1rem;
+    box-shadow: 0 12px 26px -18px rgba(21, 21, 33, .55);
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    min-width: 0;
+}
+.stats-insight-label {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--sidebar-text); font-weight: 700;
+}
+.stats-insight-value {
+    font-size: 1.05rem; font-weight: 800; color: #ffffff;
+    line-height: 1.25; word-wrap: break-word; overflow-wrap: break-word;
+}
+.stats-insight-sub {
+    font-size: .82rem; color: var(--sidebar-text);
+}
+@media (max-width: 640px) {
+    .stats-insights { grid-template-columns: 1fr; }
+}
+
+/* ---- Recruitment Overview — compact current-month funnel ---- */
+.recruit-head .recruit-month {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding-top: .1rem;
+}
+.recruit-month-trigger {
+    appearance: none;
+    border: none;
+    background: none;
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: .95rem; font-weight: 700; letter-spacing: .04em;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+.recruit-month-trigger:focus-visible {
+    outline: 1px solid var(--purple-light);
+    outline-offset: 2px; border-radius: 4px;
+}
+.recruit-month-arrow {
+    display: block;
+    width: 7px; height: 7px;
+    border-right: 1.5px solid #222;
+    border-bottom: 1.5px solid #222;
+    transform: rotate(45deg) translateY(-2px);
+    opacity: .7;
+}
+.recruit-month-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+    min-width: 180px;
+    max-height: 165px;               /* ≈ 5 visible months */
+    overflow-y: auto;
+    margin: 0; padding: .3rem;
+    list-style: none;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 14px 30px -12px rgba(21, 21, 33, .28);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,.22) transparent;
+}
+.recruit-month-menu[hidden] { display: none; }
+.recruit-month-menu::-webkit-scrollbar { width: 6px; }
+.recruit-month-menu::-webkit-scrollbar-thumb { background: rgba(0,0,0,.18); border-radius: 3px; }
+.recruit-month-menu::-webkit-scrollbar-track { background: transparent; }
+.recruit-month-menu li {
+    padding: .42rem .6rem;
+    font-size: .85rem; color: #222;
+    border-radius: 6px; cursor: pointer;
+    white-space: nowrap;
+}
+.recruit-month-menu li:hover { background: #f2f1f7; }
+.recruit-month-menu li.is-selected {
+    font-weight: 700; color: #111;
+    background: #f2f1f7;
+}
+.recruit-month-menu li.is-selected::after {
+    content: '✓'; float: right; font-weight: 700;
+    color: #8f8f9d; margin-left: .5rem;
+}
+.recruit-funnel {
+    background: var(--sidebar-bg);
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: var(--radius-sm);
+    padding: .65rem 1rem .85rem;
+    box-shadow: 0 10px 24px -18px rgba(21, 21, 33, .55);
+}
+.recruit-funnel-row {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+    padding: .3rem 0;
+}
+.recruit-funnel-label {
+    font-size: .8rem; font-weight: 600; color: #C4CDE8;
+    white-space: nowrap;
+}
+.recruit-funnel-bars {
+    overflow: hidden;                       /* clip when the max-width cap kicks in */
+}
+.recruit-funnel-fill {
+    display: inline-block;
+    height: 10px; border-radius: 5px;
+    min-width: 2px;
+    transition: width .4s ease;
+}
+.recruit-funnel-fill.zero { opacity: .22; }
+.recruit-funnel-count {
+    font-size: .85rem; font-weight: 800; color: #ffffff;
+    font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right;
+}
+.recruit-funnel-empty,
+.recruit-funnel-loading {
+    padding: 1rem 1rem; text-align: center;
+    color: var(--sidebar-text); font-size: .85rem;
+}
+@media (max-width: 520px) {
+    .recruit-funnel { padding: .55rem .75rem .7rem; }
+    .recruit-funnel-row { grid-template-columns: 60px minmax(0, 1fr) auto; gap: .55rem; }
+}
+
 </style>
 
 <script>
@@ -230,7 +396,6 @@ if (isHRorManager()) {
     var BASE = '<?= e(BASE_URL) ?>';
     var wrap  = document.getElementById('statsChartWrap');
     var state = document.getElementById('statsState');
-    var summary = document.getElementById('statsSummary');
     var filters = document.getElementById('statsFilters');
     if (!wrap || !filters) return;
 
@@ -238,12 +403,13 @@ if (isHRorManager()) {
     var yearSel    = document.getElementById('statsYear');
     var posSel     = document.getElementById('statsPosition');
     var yearWrap   = document.getElementById('statsYearWrap');
-    var COLOR      = '#A855F7';   // soft purple for bars (applied with ~75% opacity)
-    var PEAK_COLOR = '#9333EA';   // slightly stronger purple for peak bar
-    var HIGHLIGHT_COLOR = '#C084FC'; // lighter purple on hover
-    var GRID_COLOR = '#E9EDF7';   // --border
-    var TEXT_COLOR = '#A3AED0';   // --muted
-    var AXIS_TXT   = '#2B3674';   // --text
+    var SERIES_NAMES   = ['Applied', 'Screen', 'Passed', 'Hired'];
+    var SERIES_COLORS  = ['#9D4EDD', '#00B5D8', '#05CD99', '#FFB547'];
+    var CHART_COLOR    = '#9D4EDD';  // light purple, original accent — single clear bar colour
+    var BAR_OPACITY    = 0.95;
+    var GRID_COLOR = 'rgba(255,255,255,0.08)';
+    var TEXT_COLOR = '#A3AED0';
+    var AXIS_TXT   = '#C4CDE8';
 
     // Populate the job-position dropdown dynamically from the data response.
     function fillPositions(posList) {
@@ -275,64 +441,155 @@ if (isHRorManager()) {
         return Number(n).toLocaleString('en-US');
     }
 
-    function fmtDayLabel(l) {
-        // label may be a plain date string in YYYY-MM-DD (from server) — keep as-is
-        return String(l || '');
-    }
-
-    function monthName(m) {
-        var names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        var n = parseInt(m, 10);
-        return names[(n - 1)] || String(m);
-    }
-
     function emptyHandler() {
         wrap.innerHTML = '';
-        summary.hidden = true;
         state.hidden = false;
         state.textContent = 'No application data available for the selected period.';
     }
 
     function errorHandler() {
         wrap.innerHTML = '';
-        summary.hidden = true;
         state.hidden = false;
         state.textContent = 'Unable to load applicant statistics. Please try again later.';
     }
 
-    // Render the summary metrics.
-    function renderSummary(data) {
-        var posSelVal = data.position;
-        var items = [];
-        items.push({ label: 'Total Applications', value: fmtNum(data.total), sub: '' });
-        if (data.peak.day) {
-            items.push({ label: 'Peak Day', value: fmtDayLabel(data.peak.day.label), sub: fmtNum(data.peak.day.count) + ' applications' });
-        }
-        if (data.peak.month) {
-            items.push({ label: 'Peak Month', value: monthName(data.peak.month.label.slice(5, 7)), sub: fmtNum(data.peak.month.count) + ' applications' });
-        }
-        if (data.peak.position && data.peak.position.label) {
-            items.push({
-                label: 'Most Applied Position',
-                value: data.peak.position.label,
-                sub: (data.peak.position.count != null ? fmtNum(data.peak.position.count) + ' applications' : '')
+    // Map the endpoint payload to renderable funnel series. Long daily periods
+    // render a single "Applied" series so the chart stays legible.
+    function normalizeSeries(data) {
+        var collapsed = data.period === 'daily' && (data.labels || []).length > 31;
+        if (!collapsed && data.series && data.series.length) {
+            return data.series.map(function (s, idx) {
+                return {
+                    name: s.name || SERIES_NAMES[idx] || 'Applied',
+                    values: s.values || [],
+                    color: SERIES_COLORS[idx % SERIES_COLORS.length]
+                };
             });
         }
-        var html = '';
-        items.forEach(function (it) {
-            html += '<div class="stats-summary-item">' +
-                    '<div class="stats-summary-label">' + esc(it.label) + '</div>' +
-                    '<div class="stats-summary-value">' + esc(it.value) + '</div>' +
-                    (it.sub ? '<div class="stats-summary-sub">' + esc(it.sub) + '</div>' : '') +
-                    '</div>';
-        });
-        summary.innerHTML = html;
-        summary.hidden = false;
+        return [{ name: 'Applied', values: data.values || [], color: SERIES_COLORS[0] }];
     }
 
-    // Draw a lightweight, responsive SVG vertical bar chart with a simple tooltip.
+    // ---- Recruitment Overview — compact current-month funnel -------------
+    var funnelWrap   = document.getElementById('recruitFunnel');
+    var monthTrigger = document.getElementById('recruitMonthBtn');
+    var monthLabelEl = document.getElementById('recruitMonthLabel');
+    var monthMenu    = document.getElementById('recruitMonthMenu');
+    var subtitleEl   = document.getElementById('recruitSubtitle');
+    var funnelMonth  = '';               // currently selected "YYYY-MM"
+    var BAR_MAX_PX   = 280;   // fixed cap so bars stay compact, not full-width
+    // Subtle funnel bar colours, matching dashboard brand accents.
+    var FUNNEL_COLORS = ['#9D4EDD', '#00B5D8', '#05CD99', '#FFB547'];
+    var MONTH_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var MONTH_SHORT = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+    // Convert "Y-m" (e.g. "2026-09") to "SEP 2026" / "September 2026".
+    function formatMonthShort(ym) {
+        var p = String(ym || '').split('-');
+        var m = parseInt(p[1], 10);
+        if (isNaN(m)) return '';
+        return MONTH_SHORT[(m - 1) % 12] + ' ' + p[0];
+    }
+    function formatFullMonth(ym) {
+        var p = String(ym || '').split('-');
+        var m = parseInt(p[1], 10);
+        if (isNaN(m)) return '';
+        return MONTH_FULL[(m - 1) % 12] + ' ' + p[0];
+    }
+
+    // Build the 12-month menu (Jan–Dec of the selected year) and mark the
+    // currently selected month. Every month of the year is always available.
+    function buildMonthMenu(selectedYm) {
+        if (!monthMenu) return;
+        var y = selectedYm ? parseInt(selectedYm.slice(0, 4), 10) : new Date().getFullYear();
+        var html = '';
+        for (var m = 1; m <= 12; m++) {
+            var ym = y + '-' + (m < 10 ? '0' + m : m);
+            html += '<li role="option" aria-selected="' + (ym === selectedYm ? 'true' : 'false') + '"' +
+                    ' data-ym="' + ym + '"' + (ym === selectedYm ? ' class="is-selected"' : '') + '>' +
+                    formatFullMonth(ym) + '</li>';
+        }
+        monthMenu.innerHTML = html;
+    }
+
+    function openMonthMenu() {
+        if (!monthMenu) return;
+        monthMenu.hidden = false;
+        if (monthTrigger) monthTrigger.setAttribute('aria-expanded', 'true');
+        // Auto-scroll so the selected month is ~2nd from the top of the viewport
+        // (e.g. Sep shows Aug/Sep/Oct/Nov/Dec), without scrolling the page.
+        var items = monthMenu.children;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].getAttribute('data-ym') === funnelMonth) {
+                var h = items[i].offsetHeight || 33;
+                var maxScroll = monthMenu.scrollHeight - monthMenu.clientHeight;
+                monthMenu.scrollTop = Math.max(0, Math.min((i - 1) * h, maxScroll));
+                break;
+            }
+        }
+    }
+
+    function closeMonthMenu() {
+        if (!monthMenu) return;
+        monthMenu.hidden = true;
+        if (monthTrigger) monthTrigger.setAttribute('aria-expanded', 'false');
+    }
+
+    function renderFunnel(monthLabel, stages, isCurrent) {
+        if (!funnelWrap) return;
+        if (subtitleEl) {
+            subtitleEl.textContent = isCurrent
+                ? 'Current month recruitment funnel.'
+                : 'Recruitment funnel for the selected month.';
+        }
+        var total = stages.reduce(function (acc, s) { return acc + s.count; }, 0);
+        if (total === 0) {
+            funnelWrap.innerHTML = '<div class="recruit-funnel-empty">No recruitment activity this month</div>';
+            return;
+        }
+        var max = Math.max.apply(null, stages.map(function (s) { return s.count; })) || 1;
+        var rows = '';
+        stages.forEach(function (s, i) {
+            var px = Math.max(2, Math.round((s.count / max) * BAR_MAX_PX));
+            rows += '<div class="recruit-funnel-row">' +
+                    '<span class="recruit-funnel-label">' + esc(s.name) + '</span>' +
+                    '<span class="recruit-funnel-bars"><span class="recruit-funnel-fill' + (s.count === 0 ? ' zero' : '') + '" ' +
+                    'style="width:' + px + 'px;background:' + FUNNEL_COLORS[i % FUNNEL_COLORS.length] + '"></span></span>' +
+                    '<span class="recruit-funnel-count">' + fmtNum(s.count) + '</span>' +
+                    '</div>';
+        });
+        funnelWrap.innerHTML = rows;
+    }
+
+    function loadFunnel() {
+        if (!funnelWrap) return;
+        funnelWrap.innerHTML = '<div class="recruit-funnel-loading">Loading&hellip;</div>';
+        var qs = 'view=funnel';
+        if (funnelMonth) { qs += '&month=' + encodeURIComponent(funnelMonth); }
+        if (posSel && posSel.value) { qs += '&position=' + encodeURIComponent(posSel.value); }
+        fetch(BASE + '/modules/dashboard/stats_data.php?' + qs, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) {
+            if (!r.ok) throw new Error('funnel status ' + r.status);
+            return r.json();
+        }).then(function (data) {
+            if (!data.ok || !data.stage) {
+                funnelWrap.innerHTML = '<div class="recruit-funnel-empty">Unable to load recruitment data.</div>';
+                return;
+            }
+            funnelMonth = data.month || funnelMonth;
+            if (monthLabelEl) { monthLabelEl.textContent = data.month_label || formatMonthShort(funnelMonth); }
+            buildMonthMenu(funnelMonth);
+            renderFunnel(data.month_label, data.stage, data.is_current);
+        }).catch(function () {
+            funnelWrap.innerHTML = '<div class="recruit-funnel-empty">Unable to load recruitment data.</div>';
+        });
+    }
+
+    // Draw a lightweight, responsive SVG bar chart of total applications.
+    // Single clear light-purple series so the counts are easy to read.
     function renderChart(labels, values) {
-        var W = 800, H = 300, PAD_L = 44, PAD_R = 12, PAD_T = 22, PAD_B = 40;
+        var W = 800, H = 340, PAD_L = 44, PAD_R = 12, PAD_T = 28, PAD_B = 42;
         var n = values.length;
         if (!n) { emptyHandler(); return; }
 
@@ -345,18 +602,18 @@ if (isHRorManager()) {
 
         function y(v) { return PAD_T + innerH - (v / niceMax) * innerH; }
 
-        // Bar geometry: constant gap between bars, bars fill remaining width.
-        var gap = n > 12 ? 6 : 10;
+        // Bars fill the slot — wide and clearly visible.
         var slot = innerW / n;
-        var barW = Math.max(4, Math.min(48, slot - gap));
-        var radius = Math.min(6, barW * 0.25);
+        var gap = n > 12 ? 6 : 12;
+        var barW = Math.max(6, Math.min(56, slot - gap));
+        var radius = Math.min(8, barW * 0.2);
 
         // Subtle horizontal grid + Y-axis labels.
         var grid = '';
         for (var g = 0; g <= 4; g++) {
             var val = Math.round((niceMax * g) / 4);
             var gy = y(val);
-            grid += '<line x1="' + PAD_L + '" y1="' + gy + '" x2="' + (W - PAD_R) + '" y2="' + gy +
+            grid += '<line x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) +
                     '" stroke="' + GRID_COLOR + '" stroke-width="1"/>';
             grid += '<text x="' + (PAD_L - 8) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="10" fill="' + TEXT_COLOR + '">' + val + '</text>';
         }
@@ -367,62 +624,49 @@ if (isHRorManager()) {
         for (var i = 0; i < n; i++) {
             var cx = PAD_L + slot * i + slot / 2;
             if (i % step === 0 || i === n - 1) {
-                xlabels += '<text x="' + cx.toFixed(1) + '" y="' + (H - 22) + '" text-anchor="middle" font-size="10" fill="' + AXIS_TXT + '">' + esc(labels[i]) + '</text>';
+                xlabels += '<text x="' + cx.toFixed(1) + '" y="' + (H - 24) + '" text-anchor="middle" font-size="10.5" fill="' + AXIS_TXT + '">' + esc(labels[i]) + '</text>';
             }
         }
 
-        // Bars (rounded rectangles). Each bar is a transparent hit-area on top so
-        // the whole column is hoverable; the visible fill carries the color.
+        // Bars (rounded rectangles) in light purple + transparent hover hit-areas.
         var bars = '';
-        var peakIdx = -1, peakVal = -1;
         for (var i = 0; i < n; i++) {
-            if (values[i] > peakVal) { peakVal = values[i]; peakIdx = i; }
-        }
-        for (var i = 0; i < n; i++) {
+            var v  = values[i];
             var cx = PAD_L + slot * i + slot / 2;
             var x0 = cx - barW / 2;
-            var v  = values[i];
             var y0 = y(v);
             var h  = Math.max(0, baseY - y0);
-            var fill = i === peakIdx ? PEAK_COLOR : COLOR;
-            bars += '<rect class="stats-bar" x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + barW.toFixed(1) + '" ' +
+            var labelY = Math.max(y0 - 7, PAD_T + 8);
+            bars += '<rect class="stats-bar" id="b' + i + '" x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + barW.toFixed(1) + '" ' +
                     'height="' + h.toFixed(1) + '" rx="' + radius.toFixed(1) + '"' +
-                    ' fill="' + fill + '" fill-opacity="0.75" data-label="' + esc(labels[i]) + '" data-val="' + v + '"' +
-                    (v === 0 ? ' style="opacity:.28"' : '') + '/>';
-            bars += '<rect class="stats-hit" x="' + x0.toFixed(1) + '" y="' + PAD_T + '" width="' + barW.toFixed(1) + '" height="' + innerH.toFixed(1) + '" fill="transparent" data-label="' + esc(labels[i]) + '" data-val="' + v + '" data-orig="' + fill + '"/>';
+                    ' fill="' + CHART_COLOR + '" fill-opacity="' + BAR_OPACITY + '"' +
+                    ' data-label="' + esc(labels[i]) + '" data-val="' + v + '"/>';
+            if (v > 0) {
+                bars += '<text x="' + cx.toFixed(1) + '" y="' + labelY.toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">' + fmtNum(v) + '</text>';
+            }
+            bars += '<rect class="stats-hit" data-bid="b' + i + '" x="' + x0.toFixed(1) + '" y="' + PAD_T + '" width="' + barW.toFixed(1) + '" height="' + innerH.toFixed(1) + '" fill="transparent"/>';
         }
 
         var tooltip = '<div class="stats-tooltip" id="statsTooltip" hidden></div>';
-        var valueTag = '<div class="stats-bar-value" id="statsBarValue" hidden></div>';
 
         wrap.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Applicant statistics by period bar chart" preserveAspectRatio="xMidYMid meet">' +
-            grid + bars + xlabels + '</svg>' + valueTag + tooltip;
+            grid + bars + xlabels + '</svg>' + tooltip;
 
-        // Tooltip + on-hover value tag with bar highlight.
+        // Tooltip on hover (the count is already labelled on the bar).
         var tt = document.getElementById('statsTooltip');
-        var vt = document.getElementById('statsBarValue');
-        if (!tt || !vt) return;
+        if (!tt) return;
         var hitEls = wrap.querySelectorAll('.stats-hit');
         hitEls.forEach(function (hit) {
-            var label  = hit.getAttribute('data-label');
-            var val    = hit.getAttribute('data-val');
-            var origF  = hit.getAttribute('data-orig');
-            var myBar  = wrap.querySelector('.stats-bar[data-label="' + label + '"]');
-            var valText = fmtNum(val) + ' applications';
+            var bid   = hit.getAttribute('data-bid');
+            var myBar = document.getElementById(bid);
+            var label = myBar ? myBar.getAttribute('data-label') : '';
+            var val   = myBar ? myBar.getAttribute('data-val') : '0';
             hit.addEventListener('mouseenter', function () {
-                tt.innerHTML = '<div><strong>' + esc(label) + '</strong></div><span>' + valText + '</span>';
+                tt.innerHTML = '<div><strong>' + esc(label) + '</strong></div><span>' + fmtNum(val) + ' applications</span>';
                 tt.hidden = false;
                 if (myBar) {
-                    myBar.setAttribute('data-saved-fill', myBar.getAttribute('fill'));
                     myBar.setAttribute('data-saved-opacity', myBar.getAttribute('fill-opacity'));
-                    myBar.setAttribute('fill', HIGHLIGHT_COLOR);
                     myBar.setAttribute('fill-opacity', '1');
-                    var bb = myBar.getBoundingClientRect();
-                    var rect = wrap.getBoundingClientRect();
-                    vt.textContent = fmtNum(val);
-                    vt.hidden = false;
-                    vt.style.left = (bb.left - rect.left + bb.width / 2) + 'px';
-                    vt.style.top = (bb.top - rect.top - 8) + 'px';
                 }
             });
             hit.addEventListener('mousemove', function (e) {
@@ -432,11 +676,8 @@ if (isHRorManager()) {
             });
             hit.addEventListener('mouseleave', function () {
                 tt.hidden = true;
-                vt.hidden = true;
                 if (myBar) {
-                    var saved = myBar.getAttribute('data-saved-fill');
                     var savedOp = myBar.getAttribute('data-saved-opacity');
-                    if (saved) { myBar.setAttribute('fill', saved); myBar.removeAttribute('data-saved-fill'); }
                     if (savedOp) { myBar.setAttribute('fill-opacity', savedOp); myBar.removeAttribute('data-saved-opacity'); }
                 }
             });
@@ -455,7 +696,7 @@ if (isHRorManager()) {
     // no separate API auth needed — the endpoint enforces HR/Manager locally).
     function load() {
         state.hidden = true;
-        wrap.innerHTML = '<div class="stats-state">Loading statistics…</div>';
+        wrap.innerHTML = '<div class="stats-loading">Loading statistics&hellip;</div>';
         var qs = 'period=' + encodeURIComponent(periodSel.value) +
                  '&year=' + encodeURIComponent(yearSel.value) +
                  '&position=' + encodeURIComponent(posSel.value);
@@ -470,22 +711,93 @@ if (isHRorManager()) {
             fillPositions(data.positions);
             fillYears(data.range && data.range.min, data.range && data.range.max);
             yearWrap.style.visibility = (data.period === 'yearly') ? 'hidden' : '';
-            renderSummary(data);
-            if (!data.values.length) { emptyHandler(); return; }
+            renderInsights(data.peak);
+            var funnels = normalizeSeries(data);
+            var anyVal = funnels.some(function (f) { return f.values.some(function (v) { return v > 0; }); });
+            if (!funnels.length || !anyVal) { emptyHandler(); return; }
             state.hidden = true;
-            renderChart(data.labels, data.values);
+            renderChart(data.labels, funnels[0].values);
         }).catch(function () {
             errorHandler();
         });
     }
 
+    // Update the two compact insight cards from the endpoint's peak data.
+    // "No data" (never a misleading 0) when no peak record matches the filters.
+    function renderInsights(peak) {
+        if (!peak) peak = {};
+        var peakMonth = peak.month || null;
+        var topJob    = peak.position || null;
+
+        var mVal = document.getElementById('insightPeakMonth');
+        var mSub = document.getElementById('insightPeakMonthSub');
+        if (peakMonth && peakMonth.count > 0) {
+            mVal.textContent = formatMonthLabel(peakMonth.label);
+            mSub.textContent = fmtNum(peakMonth.count) + ' Applications';
+        } else {
+            mVal.textContent = 'No data';
+            mSub.textContent = '';
+        }
+
+        var jVal = document.getElementById('insightTopJob');
+        var jSub = document.getElementById('insightTopJobSub');
+        if (topJob && topJob.count > 0 && topJob.label) {
+            jVal.textContent = topJob.label;
+            jSub.textContent = fmtNum(topJob.count) + ' Applications';
+        } else {
+            jVal.textContent = 'No data';
+            jSub.textContent = '';
+        }
+    }
+
+    // Convert a "Y-m" server label (e.g. "2026-09") to "September 2026".
+    function formatMonthLabel(label) {
+        if (!label) return 'No data';
+        var parts = String(label).split('-');
+        var y = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10);
+        if (isNaN(y) || isNaN(m)) return 'No data';
+        var names = ['January','February','March','April','May','June','July',
+                     'August','September','October','November','December'];
+        var name = names[(m - 1) % 12];
+        return name + ' ' + y;
+    }
+
     filters.addEventListener('change', load);
+    if (posSel) { posSel.addEventListener('change', loadFunnel); }
+
+    // Custom month dropdown (click to open/close, click outside or Esc to close,
+    // clicking a month selects it and reloads the funnel).
+    if (monthTrigger && monthMenu) {
+        monthTrigger.addEventListener('click', function () {
+            if (monthMenu.hidden) { openMonthMenu(); } else { closeMonthMenu(); }
+        });
+        monthMenu.addEventListener('click', function (e) {
+            var t = e.target;
+            var li = t && t.nodeType === 1 && t.closest ? t.closest('li[data-ym]') : null;
+            if (!li) return;
+            var ym = li.getAttribute('data-ym');
+            funnelMonth = ym;
+            if (monthLabelEl) { monthLabelEl.textContent = formatMonthShort(ym); }
+            buildMonthMenu(ym);
+            closeMonthMenu();
+            loadFunnel();
+        });
+        document.addEventListener('click', function (e) {
+            if (e.target.closest && e.target.closest('#recruitMonthWrap')) return;
+            closeMonthMenu();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeMonthMenu();
+        });
+    }
 
     // Initial load with sensible defaults (Monthly, latest year, all jobs).
     // Set the year dropdown to "latest" by pre-selecting after fetching range
     // automatically — the server clamps year to the range, so just pass blank.
     yearSel.innerHTML = '<option value="">…</option>';
     load();
+    loadFunnel();
 })();
 </script>
 

@@ -24,7 +24,6 @@ require_once __DIR__ . '/../../includes/exam.php';
 $tabs = [
     'all'          => ['label' => 'All'],
     'new'          => ['label' => 'New', 'statuses' => ['new']],
-    'screening'    => ['label' => 'Screening',   'statuses' => ['screening', 'shortlisted']],
     'passed'       => ['label' => 'Screening Passed', 'statuses' => ['accepted', 'passed_screening']],
     'exam'         => ['label' => 'Exam'],
     'exam_results' => ['label' => 'Exam Results'],
