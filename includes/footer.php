@@ -156,7 +156,21 @@
 
     function open() { modal.hidden = false; document.addEventListener('keydown', onKey, true); }
     function close() { modal.hidden = true; pendingForm = null; document.removeEventListener('keydown', onKey, true); }
-    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    function confirmLogout() {
+        var targetForm = pendingForm;
+        close();
+        if (targetForm) targetForm.requestSubmit();
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+        if (e.key === 'Enter') {
+            // Enter confirms the logout. preventDefault/stopPropagation so the
+            // key-triggered click on a focused submit button can't re-fire.
+            e.preventDefault();
+            e.stopPropagation();
+            confirmLogout();
+        }
+    }
 
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-confirm-logout]');
@@ -169,11 +183,7 @@
 
     modal.addEventListener('click', function (e) {
         if (e.target.closest('[data-logout-close]')) { close(); return; }
-        if (e.target.closest('[data-logout-confirm]')) {
-            var targetForm = pendingForm;
-            close();
-            if (targetForm) targetForm.requestSubmit();
-        }
+        if (e.target.closest('[data-logout-confirm]')) { confirmLogout(); }
     });
 })();
 </script>
