@@ -16,6 +16,9 @@ storage/api/rate_limits/
 storage/api/error.log
 storage/web_rate_limits/
 
+# Database backups (runtime dumps, not source)
+/storage/backups/
+
 # Uploaded files (resumes/documents) - runtime data, not source
 /uploads/
 

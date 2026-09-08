@@ -7,7 +7,7 @@ const token = ref(localStorage.getItem('hr1_token') || null)
 export const auth = {
   user,
   token,
-  isAuthenticated: computed(() => !!token.value && !!user.value),
+  isAuthenticated: computed(() => !!user.value),
   isAdmin: computed(() => user.value && (user.value.role === 'hr' || user.value.role === 'manager')),
 
   setToken(newToken) {
@@ -20,18 +20,21 @@ export const auth = {
   },
 
   async login(credential, password) {
-    const res = await apiFetch('/api/v1/auth/login', {
+    const res = await apiFetch('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ credential, password }),
     })
-    auth.setToken(res.data.token)
-    user.value = res.data.user
+    if (res.data?.token) {
+      auth.setToken(res.data.token)
+    }
+    user.value = res.data?.user || res.data
     return res.data
   },
 
   async fetchUser() {
-    const res = await apiFetch('/api/v1/auth/me')
+    const res = await apiFetch('/auth/me')
     user.value = res.data
+    return res.data
   },
 
   logout() {

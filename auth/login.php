@@ -16,9 +16,7 @@ function e_login(?string $value): string
 
 if (!empty($_SESSION['user_id'])) {
     $role = $_SESSION['user_role'] ?? 'employee';
-    if (in_array($role, ['hr', 'manager'], true)) {
-        header('Location: ' . BASE_URL . '/modules/users/index.php');
-    } elseif ($role === 'applicant') {
+    if ($role === 'applicant') {
         header('Location: ' . BASE_URL . '/modules/applicant/dashboard.php');
     } else {
         header('Location: ' . BASE_URL . '/index.php');
@@ -59,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['pw_changed'] = $user['password_changed_at'] ?? '';
 
                     if (in_array($user['role'], ['hr', 'manager'], true)) {
-                        header('Location: ' . BASE_URL . '/modules/users/index.php');
+                        header('Location: ' . BASE_URL . '/index.php');
                     } elseif ($user['role'] === 'applicant') {
                         header('Location: ' . BASE_URL . '/modules/applicant/dashboard.php');
                     } else {
@@ -449,9 +447,7 @@ if (!empty($_SESSION['flash'])) {
         <div class="form-side">
             <img src="<?= BASE_URL ?>/assets/images/login%20logo.jpg" alt="TRI-M GLOBAL LOGISTICS &amp; TRADING INC." class="login-logo">
             <h2>Sign in to your account</h2>
-            <span class="portal-badge">
-                HR / Manager and Employee Portal
-            </span>
+           
 
             <?php if ($flash): ?>
                 <div class="alert alert-<?= e_login($flash['type']) ?> login-alert"><?= e_login($flash['message']) ?></div>

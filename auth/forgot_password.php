@@ -17,9 +17,7 @@ function e_fp(?string $value): string
 
 if (!empty($_SESSION['user_id'])) {
     $role = $_SESSION['user_role'] ?? 'employee';
-    if (in_array($role, ['hr', 'manager'], true)) {
-        header('Location: ' . BASE_URL . '/modules/users/index.php');
-    } elseif ($role === 'applicant') {
+    if ($role === 'applicant') {
         header('Location: ' . BASE_URL . '/modules/applicant/dashboard.php');
     } else {
         header('Location: ' . BASE_URL . '/index.php');

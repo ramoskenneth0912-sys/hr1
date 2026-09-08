@@ -179,6 +179,7 @@ class AuthController
             'email' => $u['email'] ?? null,
             'role' => $u['role'] ?? null,
             'employee_id' => isset($u['employee_id']) && $u['employee_id'] !== null ? (int) $u['employee_id'] : null,
+            'is_active' => isset($u['is_active']) ? (int) $u['is_active'] : null,
             'created_at' => $u['created_at'] ?? null,
         ];
     }

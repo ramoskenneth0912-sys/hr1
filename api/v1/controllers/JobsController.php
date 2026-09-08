@@ -169,8 +169,8 @@ class JobsController
                 $d = DateTime::createFromFormat('Y-m-d', trim((string) $in[$f]));
                 if (!$d || $d->format('Y-m-d') !== trim((string) $in[$f])) {
                     $errors[$f] = 'Must use YYYY-MM-DD format.';
-                } elseif (trim((string) $in[$f]) <= date('Y-m-d')) {
-                    $errors[$f] = 'Date must be a future date.';
+                } elseif (trim((string) $in[$f]) < date('Y-m-d')) {
+                    $errors[$f] = 'Date must be today or a future date.';
                 }
             }
         }
@@ -190,7 +190,7 @@ class JobsController
         $data = self::filterEditable($in);
         $data['title'] = mb_substr(trim((string) $in['title']), 0, 150);
         $data['status'] = strtolower((string) ($data['status'] ?? 'draft'));
-        $data['job_employment_type'] = $data['employment_type'] ?? 'regular';
+        $data['job_employment_type'] = $in['employment_type'] ?? 'regular';
         unset($data['employment_type']);
         if (($data['status'] ?? '') === 'open' && empty($data['posted_date'])) {
             $data['posted_date'] = date('Y-m-d');
@@ -256,7 +256,9 @@ class JobsController
 
         $in = api_body();
         if ($partial) {
-            $in = array_intersect_key($in, array_flip(self::EDITABLE + ['employment_type']));
+            // array_merge (not array union "+") is required so the 'employment_type'
+            // alias is kept alongside the EDITABLE columns when intersecting.
+            $in = array_intersect_key($in, array_flip(array_merge(self::EDITABLE, ['employment_type'])));
         } else {
             // Full update requires the core fields
             if (!isset($in['title']) || trim((string) $in['title']) === '') {
@@ -289,8 +291,8 @@ class JobsController
                 $d = DateTime::createFromFormat('Y-m-d', trim((string) $in[$f]));
                 if (!$d || $d->format('Y-m-d') !== trim((string) $in[$f])) {
                     $errors[$f] = 'Must use YYYY-MM-DD format.';
-                } elseif (trim((string) $in[$f]) <= date('Y-m-d')) {
-                    $errors[$f] = 'Date must be a future date.';
+                } elseif (trim((string) $in[$f]) < date('Y-m-d')) {
+                    $errors[$f] = 'Date must be today or a future date.';
                 }
             }
         }

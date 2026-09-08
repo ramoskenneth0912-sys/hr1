@@ -10,7 +10,16 @@ $bodyClass = $bodyClass ?? '';
 $currentUser = getCurrentUser();
 $userRole = getUserRole();
 
-$hour = (int) date('G');
+$appTimezone = 'Asia/Manila';
+try {
+    $tzRow = db()->query("SELECT setting_value FROM system_settings WHERE setting_key = 'timezone' LIMIT 1")->fetch();
+    if ($tzRow && !empty($tzRow['setting_value'])) {
+        $appTimezone = $tzRow['setting_value'];
+    }
+} catch (Throwable $e) {
+    $appTimezone = date_default_timezone_get();
+}
+$hour = (int) (new DateTime('now', new DateTimeZone($appTimezone)))->format('G');
 if ($hour < 12) {
     $greeting = 'Good morning';
 } elseif ($hour < 17) {
@@ -96,21 +105,26 @@ require __DIR__ . '/maintenance_banner.php';
     <?php if ($showSidebar): ?>
     <aside class="sidebar" id="appSidebar">
 <div class="sidebar-brand">
-              <a href="<?= e($navSections['MAIN'][0]['url']) ?>">
-                  <img class="brand-logo" src="<?= BASE_URL ?>/assets/images/dashboard%20logo.png" alt="Tri-M Global logo">
-                  <span class="brand-names">
-                      <span class="brand-name">Tri-M Global</span>
-                      <span class="brand-sub">Logistics &amp; Trading Inc.</span>
-                  </span>
-              </a>
-          </div>
+          <a href="<?= e($navSections['MAIN'][0]['url']) ?>" class="sidebar-brand-link">
+              <img class="brand-logo" src="<?= BASE_URL ?>/assets/images/dashboard%20logo.png" alt="Tri-M Global logo">
+              <span class="brand-names">
+                  <span class="brand-name">Tri-M Global</span>
+                  <span class="brand-sub">Logistics &amp; Trading Inc.</span>
+              </span>
+          </a>
+          <button type="button" class="sidebar-collapse-btn" id="sidebarCollapse" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">
+              <svg class="sidebar-collapse-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+          </button>
+      </div>
 
         <nav class="sidebar-nav">
             <?php foreach ($navSections as $section => $items): ?>
             <div class="nav-section">
                 <span class="nav-section-label"><?= e($section) ?></span>
                 <?php foreach ($items as $item): ?>
-                <a href="<?= e($item['url']) ?>" class="nav-link <?= $currentModule === $item['id'] ? 'active' : '' ?>">
+                <a href="<?= e($item['url']) ?>" class="nav-link <?= $currentModule === $item['id'] ? 'active' : '' ?>" data-tooltip="<?= e($item['label']) ?>">
                     <span class="nav-icon nav-icon-<?= e($item['icon']) ?>"></span>
                     <span><?= e($item['label']) ?></span>
                 </a>

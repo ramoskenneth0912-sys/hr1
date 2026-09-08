@@ -1,5 +1,7 @@
 import { auth } from '../stores/auth.js'
 
+export const API_BASE = '/HR1/api/v1'
+
 export async function apiFetch(url, options = {}) {
   const headers = { ...options.headers }
 
@@ -11,7 +13,11 @@ export async function apiFetch(url, options = {}) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json'
   }
 
-  const res = await fetch(url, { ...options, headers })
+  const res = await fetch(API_BASE + url, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
+  })
   const data = await res.json().catch(() => null)
 
   if (res.status === 401) {

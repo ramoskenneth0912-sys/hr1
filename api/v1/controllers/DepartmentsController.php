@@ -16,10 +16,12 @@ class DepartmentsController
 
         $rows = db()->query('SELECT id, code, name FROM departments ORDER BY name')->fetchAll();
 
-        Response::list(array_map(static fn(array $r) => [
+        $items = array_map(static fn(array $r) => [
             'id'   => (int) $r['id'],
             'code' => $r['code'],
             'name' => $r['name'],
-        ], $rows), count($rows), 'Departments retrieved successfully.');
+        ], $rows);
+
+        Response::list($items, 'Departments retrieved successfully.', 1, count($items), count($items));
     }
 }

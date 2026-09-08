@@ -36,13 +36,22 @@ router.afterEach(() => {
 })
 
 onMounted(async () => {
-  const token = localStorage.getItem('hr1_token')
-  if (token) {
-    auth.setToken(token)
-    try {
-      await auth.fetchUser()
-    } catch {
-      auth.logout()
+  // admin.php is already protected by the PHP session (requireHRorManager),
+  // so /auth/me authenticates via the same-origin session cookie. Try it
+  // first; fall back to a saved bearer token, then the login page.
+  try {
+    await auth.fetchUser()
+  } catch {
+    const token = localStorage.getItem('hr1_token')
+    if (token) {
+      auth.setToken(token)
+      try {
+        await auth.fetchUser()
+      } catch {
+        auth.logout()
+        router.push({ name: 'login' })
+      }
+    } else {
       router.push({ name: 'login' })
     }
   }

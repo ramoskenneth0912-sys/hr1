@@ -169,6 +169,8 @@ async function handleSubmit() {
   if (!payload.department_id) payload.department_id = null
   if (!payload.posted_date) payload.posted_date = null
   if (!payload.closing_date) payload.closing_date = null
+  payload.work_location = payload.location
+  delete payload.location
 
   try {
     if (isEdit.value) {

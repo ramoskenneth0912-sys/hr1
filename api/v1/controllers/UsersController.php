@@ -33,8 +33,9 @@ class UsersController
             $params[':role'] = $role;
         }
         if ($q = api_query('search')) {
-            $where[] = '(u.username LIKE :q OR u.email LIKE :q)';
-            $params[':q'] = '%' . $q . '%';
+            $where[] = '(u.username LIKE :q1 OR u.email LIKE :q2)';
+            $params[':q1'] = '%' . $q . '%';
+            $params[':q2'] = '%' . $q . '%';
         }
         $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 

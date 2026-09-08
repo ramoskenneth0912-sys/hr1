@@ -51,6 +51,76 @@
     if (desktopQuery.addEventListener) desktopQuery.addEventListener('change', onDesktop);
     else desktopQuery.addListener(onDesktop);
 })();
+(function () {
+    var layout = document.querySelector('.app-layout');
+    var collapseBtn = document.getElementById('sidebarCollapse');
+    if (!layout || !collapseBtn) return;
+
+    var KEY = 'hr1_sidebar_collapsed';
+    var desktopQuery = window.matchMedia('(min-width: 1201px)');
+
+    function isDesktop() { return desktopQuery.matches; }
+
+    function apply(collapsed) {
+        layout.classList.toggle('sidebar-collapsed', collapsed);
+        collapseBtn.setAttribute('aria-expanded', String(!collapsed));
+        collapseBtn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+        collapseBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    }
+
+    var saved = '0';
+    try { saved = localStorage.getItem(KEY) || '0'; } catch (err) { /* storage unavailable */ }
+    apply(saved === '1');
+
+    collapseBtn.addEventListener('click', function () {
+        apply(!layout.classList.contains('sidebar-collapsed'));
+        try { localStorage.setItem(KEY, layout.classList.contains('sidebar-collapsed') ? '1' : '0'); } catch (err) { /* storage unavailable */ }
+        hideTip();
+    });
+
+    // Floating tooltip for hovered icons while the sidebar is collapsed.
+    var tip = document.createElement('div');
+    tip.className = 'sidebar-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tip);
+
+    var tipSource = null;
+
+    function showTip(el) {
+        tip.textContent = el.getAttribute('data-tooltip') || '';
+        var r = el.getBoundingClientRect();
+        tip.style.top = Math.round(r.top + r.height / 2) + 'px';
+        tip.style.left = Math.round(r.left + r.width + 10) + 'px';
+        tip.classList.add('visible');
+        tipSource = el;
+    }
+
+    function hideTip() {
+        if (tipSource) {
+            tip.classList.remove('visible');
+            tipSource = null;
+        }
+    }
+
+    document.addEventListener('mouseover', function (e) {
+        var source = e.target.closest('[data-tooltip]');
+        if (source && layout.classList.contains('sidebar-collapsed') && isDesktop()) {
+            if (source !== tipSource) showTip(source);
+        } else {
+            hideTip();
+        }
+    });
+
+    document.addEventListener('mouseout', function (e) {
+        if (tipSource && e.target === tipSource && !e.relatedTarget) hideTip();
+    });
+
+    document.addEventListener('scroll', hideTip, true);
+
+    var onViewport = function () { hideTip(); };
+    if (desktopQuery.addEventListener) desktopQuery.addEventListener('change', onViewport);
+    else desktopQuery.addListener(onViewport);
+})();
 </script>
 
 <!-- Logout confirmation dialog (keeps logout as POST + CSRF via requestSubmit) -->

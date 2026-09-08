@@ -1,1 +1,13 @@
-Require all denied
+# Do NOT deny the whole directory — built bundle assets must be served.
+# Security: only block dot-paths and sensitive/stale source files.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} (^|/)\. [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(env|example|ini|log|sql|bak|sh|py|pl|rb|lock|map)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>

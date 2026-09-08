@@ -434,6 +434,15 @@ $filterQuery = http_build_query($qs);
                             if (!$sc || ($sc['status'] ?? '') === 'failed'):
                                 $post('AI Screening', 'screening.php');
                             endif;
+
+                            // "View Breakdown" opens the full per-section AI match
+                            // breakdown (skills / experience / education /
+                            // qualifications + matched & missing requirements) once
+                            // a valid analyzed result exists. Mirrors the "View Full
+                            // Analysis" link on the applicant detail page.
+                            if ($sc && ($sc['status'] ?? '') === 'analyzed'):
+                                $has('View Breakdown', 'screening_view.php?id=' . (int) $row['id']);
+                            endif;
                             ?>
 
                             <?php
@@ -471,6 +480,19 @@ $filterQuery = http_build_query($qs);
                                 $post('Mark Hired', 'status.php', 'hired');
                             endif;
                             ?>
+
+                            <div class="apps-menu-divider"></div>
+
+                            <form method="post" action="remove.php" class="apps-menu-form">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="applicant_id" value="<?= (int) $row['id'] ?>">
+                                <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                                <?php if ($q !== ''): ?><input type="hidden" name="q" value="<?= e($q) ?>"><?php endif; ?>
+                                <?php if ($position !== ''): ?><input type="hidden" name="position" value="<?= e($position) ?>"><?php endif; ?>
+                                <?php if ($match !== ''): ?><input type="hidden" name="match" value="<?= e($match) ?>"><?php endif; ?>
+                                <?php if ($sort !== ''): ?><input type="hidden" name="sort" value="<?= e($sort) ?>"><?php endif; ?>
+                                <button type="submit" class="apps-menu-item apps-menu-btn apps-menu-remove" data-confirm-remove>Remove</button>
+                            </form>
                         </div>
                     </div>
                 </td>
@@ -551,6 +573,21 @@ $filterQuery = http_build_query($qs);
     </div>
 </section>
 <?php endif; ?>
+
+<!-- Remove applicant confirmation — reuses the app's standard logout-modal
+     dialog styling (footer.php) so no new layout is introduced. Only the
+     confirmed form is ever submitted; Cancel/Escape/backdrop change nothing. -->
+<div id="removeApplicantConfirm" class="logout-modal" hidden role="dialog" aria-modal="true" aria-labelledby="removeApplicantConfirmTitle" aria-describedby="removeApplicantConfirmText">
+    <div class="logout-modal-backdrop" data-apprem-close></div>
+    <div class="logout-modal-box">
+        <h3 id="removeApplicantConfirmTitle">Remove Applicant?</h3>
+        <p id="removeApplicantConfirmText">Are you sure you want to remove this applicant's application and associated resume/CV? This action cannot be undone.</p>
+        <div class="logout-modal-actions">
+            <button type="button" class="btn btn-outline" data-apprem-close>Cancel</button>
+            <button type="button" class="btn btn-danger-solid" data-apprem-confirm>Remove</button>
+        </div>
+    </div>
+</div>
 
 <style>
 .apps-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.25rem; }
@@ -633,6 +670,8 @@ $filterQuery = http_build_query($qs);
 .apps-menu-form { margin: 0; }
 .apps-menu-btn { border: 0; background: none; cursor: pointer; font-family: inherit; }
 .apps-menu-divider { height: 1px; background: var(--border); margin: .35rem .25rem; }
+.apps-menu-remove { color: var(--danger); }
+.apps-menu-remove:hover { background: var(--purple-bg); color: var(--danger); }
 
 /* Keep columns readable on smaller screens: the table scrolls horizontally
    instead of squeezing the columns into unreadable widths. */
@@ -730,6 +769,49 @@ document.addEventListener('keydown', function (e) {
         });
     }
 });
+
+/* Remove-applicant confirmation dialog (mirrors the logout/remove-all modal
+   pattern in footer.php). Keeps the action as a POST + CSRF via requestSubmit
+   and never deletes anything until the user confirms. */
+(function () {
+    var modal = document.getElementById('removeApplicantConfirm');
+    if (!modal) return;
+
+    var pendingForm = null;
+
+    function open() { modal.hidden = false; document.addEventListener('keydown', onKey, true); }
+    function close() { modal.hidden = true; pendingForm = null; document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-confirm-remove]');
+        if (!btn) return;
+        pendingForm = btn.form;
+        if (!pendingForm || pendingForm.method.toUpperCase() !== 'POST') return;
+        e.preventDefault();
+        open();
+    });
+
+    modal.addEventListener('click', function (e) {
+        if (e.target.closest('[data-apprem-close]')) { close(); return; }
+        if (e.target.closest('[data-apprem-confirm]')) {
+            var targetForm = pendingForm;
+            close();
+            if (!targetForm) return;
+            if (typeof targetForm.requestSubmit === 'function') { targetForm.requestSubmit(); }
+            else { targetForm.submit(); }
+        }
+    });
+
+    // Double-submission protection: once the remove form is submitted, disable
+    // its submit button so a rapid repeat click can never fire a second POST.
+    document.addEventListener('submit', function (e) {
+        var f = e.target;
+        if (!f || !f.querySelector('[data-confirm-remove]')) return;
+        var btns = f.querySelectorAll('button[type="submit"]');
+        for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
+    });
+})();
 </script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
