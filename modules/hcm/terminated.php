@@ -1,8 +1,10 @@
 <?php
+require_once __DIR__ . '/../../includes/auth.php';
+requireHRorManager();
+
 $pageTitle = 'Terminated Employees';
 $currentModule = 'hcm';
 require_once __DIR__ . '/../../includes/header.php';
-requireHRorManager();
 
 $employees = db()->query(
     'SELECT e.*, d.name AS department_name FROM employees e

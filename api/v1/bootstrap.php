@@ -34,14 +34,22 @@ header('Referrer-Policy: no-referrer');
  * CORS — restricted allowlist instead of "*".
  * Same-origin requests (the website's own pages) never send a cross-origin
  * check and work regardless. Cross-origin calls are only allowed from the
- * origins listed below (local development defaults + HR1_API_ALLOWED_ORIGINS
- * environment override for production, comma-separated).
+ * origins listed below.
+ *   - Production: ONLY the HR1_API_ALLOWED_ORIGINS list (comma-separated).
+ *     When it is not configured, cross-origin CORS is disabled entirely —
+ *     the localhost/development origins are never emitted in production.
+ *   - Development/staging: local Vite dev-server origins are added as
+ *     conveniences alongside the HR1_API_ALLOWED_ORIGINS optional override.
  */
+$envOrigins = trim((string) (getenv('HR1_API_ALLOWED_ORIGINS') ?: ''));
+if (HR1_IS_PRODUCTION && $envOrigins === '') {
+    error_log('HR1 API: HR1_API_ALLOWED_ORIGINS is not configured in production; cross-origin CORS is disabled.');
+}
+$devOrigins = HR1_IS_PRODUCTION ? '' : ',http://localhost,https://localhost,http://127.0.0.1,https://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173';
+
 $allowedOrigins = array_values(array_filter(array_map(
     static fn (string $o): string => rtrim(strtolower(trim($o)), '/'),
-    explode(',', (getenv('HR1_API_ALLOWED_ORIGINS') ?: '')
-        . ',http://localhost,https://localhost,http://127.0.0.1,https://127.0.0.1,'
-        . 'http://localhost:5173,http://127.0.0.1:5173')
+    explode(',', $envOrigins . $devOrigins)
 )));
 $requestOrigin = strtolower(trim((string) ($_SERVER['HTTP_ORIGIN'] ?? '')));
 if ($requestOrigin !== '' && in_array(rtrim($requestOrigin, '/'), $allowedOrigins, true)) {

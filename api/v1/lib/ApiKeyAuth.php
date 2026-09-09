@@ -74,7 +74,8 @@ class ApiKeyAuth
         $random = random_bytes(self::KEY_RANDOM_BYTES);
         $key = self::KEY_PREFIX . rtrim(strtr(base64_encode($random), '+/', '-_'), '=');
         $keyHash = hash('sha256', $key);
-        $keyPrefix = substr($key, 0, 12) . '****';
+        // Display prefix must fit api_keys.key_prefix VARCHAR(12): 8 chars + '****'.
+        $keyPrefix = substr($key, 0, 8) . '****';
 
         return [
             'key'        => $key,

@@ -224,6 +224,12 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
         <div class="screening-summary-rec">
             <span class="badge <?= $screening['recommendation'] === 'Strong Match' ? 'badge-success' : ($screening['recommendation'] === 'Good Match' ? 'badge-info' : ($screening['recommendation'] === 'Moderate Match' ? 'badge-warning' : 'badge-danger')) ?>" style="font-size:.85rem;padding:.4rem .9rem;"><?= e($screening['recommendation']) ?></span>
+            <?php if (!empty($screening['confidence'])): ?>
+            <span class="badge <?= $screening['confidence'] === 'High' ? 'badge-success' : ($screening['confidence'] === 'Medium' ? 'badge-warning' : 'badge-danger') ?>" style="font-size:.8rem;padding:.3rem .7rem;">Confidence: <?= e($screening['confidence']) ?></span>
+            <?php endif; ?>
+            <?php if (!empty($screening['screening_version'])): ?>
+            <span class="badge badge-secondary" style="font-size:.75rem;padding:.25rem .6rem;"><?= e($screening['screening_version']) ?></span>
+            <?php endif; ?>
             <span class="screening-summary-date">Screened: <?= date('M d, Y h:i A', strtotime($screening['screened_at'])) ?></span>
         </div>
     </div>

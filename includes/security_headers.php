@@ -19,10 +19,13 @@
  * HSTS notes:
  *  - This environment is local XAMPP over plain HTTP. Browsers require HTTPS
  *    before honoring HSTS, so sending it here is both ineffective and, if it
- *    were honored, could lock localhost into HTTPS. Therefore HSTS (and
- *    upgrade-insecure-requests) are emitted ONLY when the request is already
- *    served over HTTPS — i.e. production — and never on local HTTP.
+ *    were honored, could lock localhost into HTTPS. Therefore HSTS is emitted
+ *    ONLY in production AND only when the request is genuinely HTTPS.
+ *  - The Vue/React Vite dev servers (localhost:5173/5174) are allowed by CSP
+ *    only in non-production environments.
  */
+
+require_once __DIR__ . '/environment.php';
 
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
@@ -32,17 +35,20 @@ header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
-// Detect HTTPS exactly as session.php does, so header behaviour matches the
-// session cookie hardening (Secure flag) that is already in place.
-$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-    || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
+// HTTPS detection shared with session.php / environment.php so header behaviour
+// matches the session cookie hardening (Secure flag) that is already in place.
+$isHttps = hr1_is_https();
+
+// Local Vite dev-server origins are development-only conveniences and must not
+// appear in production responses.
+$devOrigins = HR1_IS_PRODUCTION ? '' : ' http://localhost:5173 http://localhost:5174';
 
 $csp = "default-src 'self'; "
-     . "script-src 'self' 'unsafe-inline' http://localhost:5173 http://localhost:5174; "
+     . "script-src 'self' 'unsafe-inline'{$devOrigins}; "
      . "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
      . "font-src 'self' https://fonts.gstatic.com data:; "
      . "img-src 'self' data:; "
-     . "connect-src 'self' http://localhost:5173 http://localhost:5174; "
+     . "connect-src 'self'{$devOrigins}; "
      . "object-src 'none'; "
      . "base-uri 'self'; "
      . "frame-ancestors 'self'; "
@@ -55,7 +61,9 @@ if ($isHttps) {
 }
 header("Content-Security-Policy: " . $csp);
 
-// HSTS is HTTPS-only. Never sent over plain HTTP (local development).
-if ($isHttps) {
+// HSTS is HTTPS-only AND production-only. Never sent over plain HTTP (local
+// development) or in staging where a valid routed HTTPS certificate may not
+// exist yet.
+if ($isHttps && HR1_IS_PRODUCTION) {
     header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
 }

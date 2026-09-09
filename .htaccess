@@ -1,6 +1,6 @@
-SetEnv HR1_MAIL_FROM adminhr00001@gmail.com
-
-# Custom 404 error page
+# Custom 404 error page. Must be an absolute server path (a relative name is
+# treated by Apache as a plain-text message). Keep this in sync with the app's
+# base path (HR1_BASE_URL) when deploying to a different location.
 ErrorDocument 404 /HR1/404.php
 
 # ============================================================
@@ -14,10 +14,11 @@ ErrorDocument 404 /HR1/404.php
     RewriteRule .* - [F,L]
 </IfModule>
 
-# Deny direct access to sensitive configuration / log / archive files
-# even if they are served from a sub-directory or renamed path.
+# Deny direct access to sensitive configuration / log / archive / plain-text
+# files even if they are served from a sub-directory or renamed path.
+# ("txt" also covers accidentially-published app crash/error dumps.)
 <IfModule mod_authz_core.c>
-    <FilesMatch "\.(env|example|ini|log|sql|bak|sh|py|pl|rb|lock|git)$">
+    <FilesMatch "\.(env|example|ini|log|sql|bak|sh|py|pl|rb|lock|git|txt)$">
         Require all denied
     </FilesMatch>
 </IfModule>

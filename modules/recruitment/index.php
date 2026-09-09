@@ -131,8 +131,7 @@ $jobs = db()->query(
         }
     }
 
-    function doRemove() {
-        var f = pendingForm;
+    function doRemove(f) {
         if (!f) return;
         if (typeof fetch !== 'function') { f.requestSubmit(); return; }
         var fd = new FormData(f);
@@ -146,13 +145,13 @@ $jobs = db()->query(
                 return { status: r.status, data: data };
             });
         }).then(function (res) {
-            if (res.data && res.data.ok) {
+            if (res.data && (res.data.ok || res.data.success)) {
                 var tr = f.closest('tr');
                 if (tr) tr.remove();
                 checkEmpty();
                 showToast('success', res.data.message || 'Job posting removed successfully.');
             } else {
-                showToast('danger', (res.data && res.data.error) || 'Unable to remove the job posting. Please try again.');
+                showToast('danger', (res.data && (res.data.error || res.data.message)) || 'Unable to remove the job posting. Please try again.');
             }
         }).catch(function () {
             showToast('danger', 'Unable to remove the job posting. Please try again.');
@@ -163,7 +162,7 @@ $jobs = db()->query(
         var f = pendingForm;
         close();
         if (!f) return;
-        doRemove();
+        doRemove(f);
     }
 
     document.addEventListener('click', function (e) {

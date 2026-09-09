@@ -5,6 +5,8 @@
  * Returns extracted text string or empty string on failure.
  */
 
+require_once __DIR__ . '/environment.php';
+
 /**
  * Main entry point: extract text from a resume file.
  *
@@ -13,12 +15,79 @@
  */
 
 /**
- * Absolute path to the Tesseract OCR binary (override via
- * TESSERACT_PATH environment variable if installed elsewhere).
+ * Absolute path to the Tesseract OCR binary, or '' to resolve via PATH.
+ * Configurable via the TESSERACT_PATH environment variable.
  */
 function tesseractPath(): string
 {
-    return trim((string) (getenv('TESSERACT_PATH') ?: 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'));
+    return trim((string) (getenv('TESSERACT_PATH') ?: ''));
+}
+
+// ---------------------------------------------------------------------------
+// Binary resolution. Every converter is configurable via an environment
+// variable and never hardcoded to a machine-specific path. When the variable
+// is set, the file must exist AND be executable before it is used; otherwise
+// the command is resolved through the OS PATH (pdftotext / antiword / catdoc /
+// tesseract must be installed for that). All invocations use escapeshellarg()
+// so filenames can never reach the shell as code.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a resume-parsing binary from an explicit env path (verified to be a
+ * real executable file) or fall back to a PATH lookup by command name.
+ * Logs a warning (once per process) when a configured path is unusable.
+ *
+ * @return string The command string to run (always escaped before execution)
+ */
+function hr1ResumeBinCommand(string $envKey, string $commandName): string
+{
+    static $warned = [];
+
+    $configured = trim((string) (getenv($envKey) ?: ''));
+    if ($configured === '') {
+        return $commandName; // use PATH
+    }
+    if (is_file($configured) && is_executable($configured)) {
+        return $configured;
+    }
+    if (empty($warned[$envKey])) {
+        $warned[$envKey] = true;
+        error_log('HR1 RESUME PARSER: ' . $envKey . ' is configured but is not an executable file; '
+            . 'falling back to ' . $commandName . ' from the system PATH');
+    }
+    return $commandName;
+}
+
+/**
+ * Run a converter command with fully escaped arguments, capturing output.
+ *
+ * @return string Trimmed output (stdout + stderr) or '' on failure
+ */
+function hr1RunResumeCommand(string $command, string $argA, string $argB = ''): string
+{
+    $cmd = escapeshellarg($command) . ' ' . escapeshellarg($argA);
+    if ($argB !== '') {
+        $cmd .= ' ' . escapeshellarg($argB);
+    }
+    $out = @shell_exec($cmd . ' 2>&1');
+    return is_string($out) ? trim($out) : '';
+}
+
+/** The tesseract command string to run (path when configured, else PATH). */
+function tesseractCommand(): string
+{
+    $path = tesseractPath();
+    return $path !== '' ? $path : 'tesseract';
+}
+
+/** True when Tesseract can be executed (explicit path valid, or on PATH). */
+function hr1TesseractUsable(): bool
+{
+    $configured = tesseractPath();
+    if ($configured !== '') {
+        return is_file($configured) && is_executable($configured);
+    }
+    return hr1_command_on_path('tesseract');
 }
 
 /**
@@ -32,19 +101,21 @@ function tesseractPath(): string
  */
 function ocrAvailabilityCheck(): array
 {
-    $path = tesseractPath();
-    $ok = $path !== '';
+    $configured = tesseractPath();
+    $display = $configured !== '' ? $configured : 'tesseract (PATH)';
+    $ok = true;
     $reason = '';
     $hint = '';
 
-    if (!$ok) {
-        $reason = 'Tesseract OCR path is not configured (TESSERACT_PATH is empty).';
-    } elseif (!file_exists($path)) {
+    if ($configured !== '' && !file_exists($configured)) {
         $ok = false;
-        $reason = 'Tesseract OCR is not installed at: ' . $path;
-    } elseif (!is_executable($path)) {
+        $reason = 'Tesseract OCR is not installed at: ' . $configured;
+    } elseif ($configured !== '' && !is_executable($configured)) {
         $ok = false;
-        $reason = 'Tesseract OCR binary exists but is not executable: ' . $path;
+        $reason = 'Tesseract OCR binary exists but is not executable: ' . $configured;
+    } elseif ($configured === '' && !hr1_command_on_path('tesseract')) {
+        $ok = false;
+        $reason = 'Tesseract OCR is not on the server PATH and TESSERACT_PATH is not configured.';
     }
 
     if (!$ok) {
@@ -53,7 +124,7 @@ function ocrAvailabilityCheck(): array
             . '--accept-source-agreements --accept-package-agreements --silent';
     }
 
-    return ['ok' => $ok, 'path' => $path, 'reason' => $reason, 'hint' => $hint];
+    return ['ok' => $ok, 'path' => $display, 'reason' => $reason, 'hint' => $hint];
 }
 
 function extractResumeText(string $filePath): string
@@ -195,14 +266,16 @@ function extractDoc(string $filePath): string
 {
     $notAvailable = ['not found', 'not recognized', 'no such file', 'is not recognized'];
 
-    // Try antiword (if installed)
-    $antiword = trim((string) @shell_exec('antiword ' . escapeshellarg($filePath) . ' 2>&1'));
+    // antiword (env ANTIWORD_PATH or via PATH)
+    $antiwordBin = hr1ResumeBinCommand('ANTIWORD_PATH', 'antiword');
+    $antiword = hr1RunResumeCommand($antiwordBin, $filePath);
     if ($antiword !== '' && !strContainsAny(strtolower($antiword), $notAvailable)) {
         return $antiword;
     }
 
-    // Try catdoc (if installed)
-    $catdoc = trim((string) @shell_exec('catdoc ' . escapeshellarg($filePath) . ' 2>&1'));
+    // catdoc (env CATDOC_PATH or via PATH)
+    $catdocBin = hr1ResumeBinCommand('CATDOC_PATH', 'catdoc');
+    $catdoc = hr1RunResumeCommand($catdocBin, $filePath);
     if ($catdoc !== '' && !strContainsAny(strtolower($catdoc), $notAvailable)) {
         return $catdoc;
     }
@@ -238,16 +311,11 @@ function extractPdf(string $filePath): string
 {
     $notAvailable = ['not found', 'not recognized', 'no such file', 'is not recognized'];
 
-    // Try pdftotext (if installed)
-    $pdftotext = trim((string) @shell_exec('pdftotext ' . escapeshellarg($filePath) . ' - 2>&1'));
+    // pdftotext (env PDTOTEXT_PATH or via PATH)
+    $pdfBin = hr1ResumeBinCommand('PDTOTEXT_PATH', 'pdftotext');
+    $pdftotext = hr1RunResumeCommand($pdfBin, $filePath, '-');
     if ($pdftotext !== '' && !strContainsAny(strtolower($pdftotext), $notAvailable)) {
         return $pdftotext;
-    }
-
-    // Try poppler pdftotext
-    $pdftotext2 = trim((string) @shell_exec('C:\xampp\php\pdftotext ' . escapeshellarg($filePath) . ' - 2>&1'));
-    if ($pdftotext2 !== '' && !strContainsAny(strtolower($pdftotext2), $notAvailable)) {
-        return $pdftotext2;
     }
 
     // Text-object extraction (handles FlateDecode/ASCII85Decode streams).
@@ -303,10 +371,11 @@ function extractRawText(string $filePath): string
  */
 function ocrPdfImages(string $filePath): string
 {
-    $tesseract = tesseractPath();
-    if ($tesseract === '' || !is_executable($tesseract) || !file_exists($tesseract)) {
+    if (!hr1TesseractUsable()) {
         return '';
     }
+
+    $tesseract = tesseractCommand();
 
     $raw = @file_get_contents($filePath);
     if ($raw === false || $raw === '') {

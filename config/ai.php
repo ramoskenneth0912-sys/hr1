@@ -37,3 +37,19 @@ define('AI_SCREENING_TIMEOUT_SECONDS', max(1, (int) (getenv('AI_SCREENING_TIMEOU
 define('AI_SCREENING_MAX_RESUME_CHARS', max(500, (int) (getenv('AI_SCREENING_MAX_RESUME_CHARS') ?: 12000)));
 
 define('AI_SCREENING_MAX_SUMMARY_CHARS', max(50, (int) (getenv('AI_SCREENING_MAX_SUMMARY_CHARS') ?: 1500)));
+
+/**
+ * Hybrid screening engine v2 (default ON).
+ *
+ * AI_SCREENING_SEMANTIC = on | off
+ *   Enables the semantic / contextual keyword layer (hybrid mode). When "off"
+ *   the engine transparently falls back to the original local rule-based
+ *   matcher, so the system always works.
+ *
+ * AI_SCREENING_VERSION
+ *   Version tag stored on every new screening row. Existing rows keep NULL so
+ *   old results are never silently relabeled as the new engine.
+ */
+define('AI_SCREENING_SEMANTIC', strtolower(trim((string) (getenv('AI_SCREENING_SEMANTIC') ?: 'on'))) === 'on');
+
+define('AI_SCREENING_VERSION', trim((string) (getenv('AI_SCREENING_VERSION') ?: 'hybrid-v2')));

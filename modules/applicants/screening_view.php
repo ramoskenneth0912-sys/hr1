@@ -78,6 +78,21 @@ require_once __DIR__ . '/../../includes/header.php';
 <?php
 $matched = json_decode($screening['matched_requirements'] ?? '[]', true) ?: [];
 $missing = json_decode($screening['missing_requirements'] ?? '[]', true) ?: [];
+$partial = json_decode($screening['partial_requirements'] ?? '[]', true) ?: [];
+$evidence = json_decode($screening['evidence'] ?? '[]', true) ?: [];
+$concerns = json_decode($screening['concerns'] ?? '[]', true) ?: [];
+$confidence = (string) ($screening['confidence'] ?? '');
+$version = (string) ($screening['screening_version'] ?? '');
+$isLegacy = ($version === '');
+
+$confidenceBadge = 'badge-secondary';
+if ($confidence === 'High') {
+    $confidenceBadge = 'badge-success';
+} elseif ($confidence === 'Medium') {
+    $confidenceBadge = 'badge-warning';
+} elseif ($confidence === 'Low') {
+    $confidenceBadge = 'badge-danger';
+}
 
 $recommendationClass = 'badge-secondary';
 if ($screening['recommendation'] === 'Strong Match') {
@@ -184,6 +199,20 @@ function scoreColor(int $score): string
                 <span class="screening-info-label">Screened At</span>
                 <span class="screening-info-value"><?= date('M d, Y h:i A', strtotime($screening['screened_at'])) ?></span>
             </div>
+            <div class="screening-info-row">
+                <span class="screening-info-label">Screening Engine</span>
+                <span class="screening-info-value"><?= $isLegacy ? 'Legacy rule-based engine' : e($version) ?></span>
+            </div>
+            <div class="screening-info-row">
+                <span class="screening-info-label">Confidence</span>
+                <span class="screening-info-value"><?= $confidence !== '' ? '<span class="badge ' . e($confidenceBadge) . '">' . e($confidence) . '</span>' : '<span class="badge badge-secondary">—</span>' ?></span>
+            </div>
+            <?php if ($isLegacy): ?>
+            <div class="screening-info-row">
+                <span class="screening-info-label">Note</span>
+                <span class="screening-info-value" style="color:var(--warning);font-size:.8rem;">Re-run screening to apply the improved hybrid-v2 engine.</span>
+            </div>
+            <?php endif; ?>
         </div>
     </section>
 </div>
@@ -231,7 +260,57 @@ function scoreColor(int $score): string
     </section>
 </div>
 
-<div class="panel fade-in-up" style="animation-delay:.3s;padding:1rem 1.5rem;">
+<?php if (!empty($partial)): ?>
+<div class="two-col fade-in-up" style="animation-delay:.22s;">
+    <section class="panel">
+        <h2 style="color:var(--warning);">Partially Matched Requirements</h2>
+        <ul class="screening-req-list screening-req-partial">
+            <?php foreach ($partial as $item): ?>
+            <li>
+                <span class="req-icon req-icon-partial">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 3 L12 21 M5 8 L19 8" transform="rotate(45 12 12)"/><line x1="5" y1="19" x2="19" y2="5" transform="rotate(45 12 12)"/></svg>
+                </span>
+                <?= e($item) ?>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+
+    <section class="panel">
+        <h2 style="color:var(--danger);">Concerns / Follow-up</h2>
+        <?php if (empty($concerns)): ?>
+        <div class="empty" style="padding:1.5rem;text-align:center;color:var(--muted);">No concerns raised by the screening engine.</div>
+        <?php else: ?>
+        <ul class="screening-req-list screening-req-concerns">
+            <?php foreach ($concerns as $item): ?>
+            <li>
+                <span class="req-icon req-icon-missing">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+                </span>
+                <?= e($item) ?>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+    </section>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($evidence)): ?>
+<section class="panel fade-in-up" style="animation-delay:.24s;">
+    <h2>Matching Evidence</h2>
+    <ul class="screening-req-list screening-req-evidence">
+        <?php foreach ($evidence as $item): ?>
+        <li>
+            <span class="req-icon req-icon-evidence">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <?= e($item) ?>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+</section>
+<?php endif; ?>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
         <p style="font-size:.8rem;color:var(--muted);margin:0;">This screening is an automated AI analysis to assist HR in the review process. Final hiring decisions should be made by the HR/Manager.</p>
         <form method="post" action="screening.php" style="margin:0;">

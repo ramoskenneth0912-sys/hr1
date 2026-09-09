@@ -24,6 +24,7 @@
 
 require_once __DIR__ . '/resume_parser.php';
 require_once __DIR__ . '/../config/ai.php';
+require_once __DIR__ . '/hybrid_screening.php';
 
 const AI_SCREENING_STATUS_PENDING  = 'pending';
 const AI_SCREENING_STATUS_ANALYZED = 'analyzed';
@@ -800,12 +801,22 @@ function scoreEducationMatch(string $educationReq, string $resumeNormalized): ar
 
 /**
  * Resolve the job posting an applicant applied for.
- * Uses the linked job_posting_id first, then falls back to a title match.
+ *
+ * Priority order (never rewrites a valid link):
+ *   1. job_posting_id            — the exact posting the applicant applied to,
+ *      even when the posting title has been renamed since.
+ *   2. exact title match         — open job with identical title.
+ *   3. normalized title match    — casing/punctuation/whitespace differences.
+ *   4. controlled semantic fallback — related-job-title matching ONLY when no
+ *      job_posting_id exists and no exact/normalized title matched. Uses the
+ *      structured terminology layer as supporting evidence, never as a blind
+ *      synonym, and is disabled when the semantic layer is unavailable.
  *
  * @return array|null The job_postings row, or null when none can be resolved.
  */
 function resolveScreeningJob(array $applicant): ?array
 {
+    // 1) Linked job posting is ALWAYS authoritative.
     if (!empty($applicant['job_posting_id'])) {
         $stmt = db()->prepare('SELECT * FROM job_postings WHERE id = ?');
         $stmt->execute([(int) $applicant['job_posting_id']]);
@@ -817,9 +828,51 @@ function resolveScreeningJob(array $applicant): ?array
         return null;
     }
 
+    // 2) Exact title match.
     $stmt = db()->prepare('SELECT * FROM job_postings WHERE title = ? AND status = ? LIMIT 1');
     $stmt->execute([$title, 'open']);
-    return $stmt->fetch() ?: null;
+    if ($job = $stmt->fetch()) {
+        return $job;
+    }
+
+    // 3) Normalized title match (casing / punctuation / whitespace).
+    if (function_exists('hs_normalize')) {
+        $normTitle = hs_normalize($title);
+        if ($normTitle !== '') {
+            $allOpen = db()->query("SELECT * FROM job_postings WHERE status = 'open'")->fetchAll();
+            foreach ($allOpen as $candidate) {
+                if (hs_normalize((string) ($candidate['title'] ?? '')) === $normTitle) {
+                    return $candidate;
+                }
+            }
+        }
+    }
+
+    // 4) Controlled semantic/related-title fallback.
+    if (AI_SCREENING_SEMANTIC && function_exists('hs_related_title_score')) {
+        $allOpen = db()->query("SELECT * FROM job_postings WHERE status = 'open'")->fetchAll();
+        $best = null;
+        $bestScore = 0.0;
+        $bestId = PHP_INT_MAX;
+        foreach ($allOpen as $candidate) {
+            $candTitle = (string) ($candidate['title'] ?? '');
+            if ($candTitle === '' || strcasecmp($candTitle, $title) === 0) {
+                continue;
+            }
+            $score = hs_related_title_score($title, $candTitle);
+            if ($score > $bestScore || ($score === $bestScore && (int) $candidate['id'] < $bestId)) {
+                $best = $candidate;
+                $bestScore = $score;
+                $bestId = (int) $candidate['id'];
+            }
+        }
+        // Require meaningful related-evidence, never a blind guess.
+        if ($best !== null && $bestScore >= 0.40) {
+            return $best;
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -958,14 +1011,44 @@ function localScreeningAnalysis(array $job, string $resumeText): array
  * Dispatch analysis to the configured provider.
  * Never modifies the database.
  *
+ * With provider "local":
+ *   - when semantic analysis is enabled (AI_SCREENING_SEMANTIC=on, the
+ *     default) the hybrid engine runs first. If it reports an 'error'
+ *     (e.g. terminology layer unavailable) the original rule-based matcher
+ *     is used as a transparent fallback and the result is tagged "-fallback".
+ *   - when semantic analysis is disabled the original rule-based matcher is
+ *     used directly (also tagged "-fallback").
+ *
+ * @param array<string,mixed> $job
+ * @param array<string,mixed> $applicantMeta applicant form fields (education,
+ *        skills, work_experience) used as secondary evidence by the hybrid engine.
  * @return array Result shape (see runAiScreening) or ['error' => message].
  */
-function analyzeResumeWithProvider(array $job, string $resumeText): array
+function analyzeResumeWithProvider(array $job, string $resumeText, array $applicantMeta = []): array
 {
     $provider = AI_SCREENING_PROVIDER;
 
     if ($provider === 'local') {
-        return localScreeningAnalysis($job, $resumeText);
+        if (AI_SCREENING_SEMANTIC && function_exists('hs_hybrid_screen')) {
+            $result = hs_hybrid_screen($job, $resumeText, $applicantMeta);
+            if (!isset($result['error'])) {
+                $result['screening_version'] = AI_SCREENING_VERSION;
+                $result['fallback_used'] = false;
+                return $result;
+            }
+        }
+
+        // Original rule-based matcher (always available).
+        $result = localScreeningAnalysis($job, $resumeText);
+        if (!isset($result['error'])) {
+            $result['screening_version'] = AI_SCREENING_VERSION . '-fallback';
+            $result['confidence'] = 'medium';
+            $result['partial'] = $result['partial'] ?? [];
+            $result['evidence'] = $result['evidence'] ?? [];
+            $result['concerns'] = $result['concerns'] ?? [];
+            $result['fallback_used'] = true;
+        }
+        return $result;
     }
 
     if ($provider === 'openai-compatible') {
@@ -1235,6 +1318,11 @@ function remoteAnalyzeResume(array $job, string $resumeText): array
         'missing'              => $parsed['missing'],
         'analysis'             => $parsed['analysis'],
         'job_title'            => $job['title'],
+        'screening_version'    => 'remote-v1',
+        'confidence'           => null,
+        'partial'              => [],
+        'evidence'             => [],
+        'concerns'             => [],
     ];
 }
 
@@ -1412,7 +1500,7 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
     }
 
     // Run the configured provider (local engine by default).
-    $analysis = analyzeResumeWithProvider($job, $resumeText);
+    $analysis = analyzeResumeWithProvider($job, $resumeText, $applicant);
     if (isset($analysis['error'])) {
         return ['error' => $analysis['error']];
     }
@@ -1426,6 +1514,11 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
     $matched                = $analysis['matched'] ?? [];
     $missing                = $analysis['missing'] ?? [];
     $aiAnalysis             = $analysis['analysis'];
+    $screeningVersion       = $analysis['screening_version'] ?? AI_SCREENING_VERSION;
+    $confidence             = $analysis['confidence'] ?? 'medium';
+    $partialRequirements    = $analysis['partial'] ?? [];
+    $evidence               = $analysis['evidence'] ?? [];
+    $concerns               = $analysis['concerns'] ?? [];
 
     // Store result in database
     if ($screenedBy === null) {
@@ -1442,12 +1535,16 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
         'INSERT INTO ai_screening
          (applicant_id, job_posting_id, overall_score, skills_score, experience_score,
           education_score, qualifications_score, recommendation, matched_requirements,
-          missing_requirements, ai_analysis, screened_by, status, error_message)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          missing_requirements, ai_analysis, screened_by, status, error_message,
+          screening_version, confidence, partial_requirements, evidence, concerns)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     $matchedJson = json_encode($matched, JSON_UNESCAPED_UNICODE);
     $missingJson = json_encode($missing, JSON_UNESCAPED_UNICODE);
+    $partialJson = json_encode($partialRequirements, JSON_UNESCAPED_UNICODE);
+    $evidenceJson = json_encode((array) $evidence, JSON_UNESCAPED_UNICODE);
+    $concernsJson = json_encode($concerns, JSON_UNESCAPED_UNICODE);
 
     $insertStmt->execute([
         $applicantId,
@@ -1464,6 +1561,11 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
         $screenedBy,
         AI_SCREENING_STATUS_ANALYZED,
         null,
+        $screeningVersion,
+        $confidence,
+        $partialJson,
+        $evidenceJson,
+        $concernsJson,
     ]);
 
     if ($advanceApplicant) {
@@ -1493,6 +1595,11 @@ function runAiScreening(int $applicantId, ?int $jobPostingId = null, bool $advan
         'analysis' => $aiAnalysis,
         'job_title' => $job['title'],
         'applicant_name' => $applicant['first_name'] . ' ' . $applicant['last_name'],
+        'screening_version' => $screeningVersion,
+        'confidence' => $confidence,
+        'partial' => $partialRequirements,
+        'evidence' => $evidence,
+        'concerns' => $concerns,
     ];
 }
 

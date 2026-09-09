@@ -1,23 +1,38 @@
 <?php
 /**
- * Email sending helpers for the password-reset workflow.
+ * Email sending helpers for the HR1 system.
  *
- * sendResetApprovedToEmployee() — called after HR approval; sends the reset link.
- * sendResetRequestToHR()         — called when an employee requests a reset (optional email).
- *
- * On Windows, PHP's mail() ignores sendmail_path and silently drops emails via
- * its broken localhost:25 built-in SMTP. This module calls sendmail.exe directly
- * via proc_open() to guarantee delivery through the configured Gmail SMTP relay.
+ * Production delivery uses a direct SMTP client (stream_socket_client) driven
+ * by the SMTP_* environment variables with authentication. When no SMTP_HOST
+ * is configured (development on Windows), the local sendmail.exe relay is used
+ * as a DEV-ONLY fallback so the existing local workflow keeps working.
  */
+
+require_once __DIR__ . '/environment.php';
 
 define('HR1_MAIL_FROM', getenv('HR1_MAIL_FROM') ?: 'no-reply@hr1.local');
 define('HR1_MAIL_FROM_NAME', 'TRI-M Global');
 define('HR1_APP_NAME', defined('APP_NAME') ? APP_NAME : 'Merchandising Management System');
 
+// ---------------------------------------------------------------------------
+// SMTP relay configuration (production). All values are environment-driven;
+// nothing is hardcoded here and no credentials are embedded in the codebase.
+// ---------------------------------------------------------------------------
+define('SMTP_HOST', getenv('SMTP_HOST') !== false ? getenv('SMTP_HOST') : '');
+define('SMTP_PORT', (int) (getenv('SMTP_PORT') ?: 0));
+define('SMTP_USER', getenv('SMTP_USER') !== false ? getenv('SMTP_USER') : '');
+define('SMTP_PASS', getenv('SMTP_PASS') !== false ? getenv('SMTP_PASS') : '');
+define('SMTP_FROM', getenv('SMTP_FROM') ?: HR1_MAIL_FROM);
+$smtpEncryption = getenv('SMTP_ENCRYPTION');
+if ($smtpEncryption === false) {
+    $smtpEncryption = SMTP_PORT === 465 ? 'ssl' : (SMTP_PORT === 587 ? 'tls' : 'none');
+}
+define('SMTP_ENCRYPTION', strtolower(trim($smtpEncryption)));
+
 /**
  * The branded sender identity shown to recipients, e.g.:
- *   TRI-M Global <adminhr00001@gmail.com>
- * Uses the existing HR Gmail address (HR1_MAIL_FROM) unchanged.
+ *   TRI-M Global <no-reply@example.com>
+ * Uses the configured HR1_MAIL_FROM address unchanged.
  */
 function hr1MailFrom(): string
 {
@@ -35,19 +50,16 @@ function hr1MailFrom(): string
 
 /**
  * Absolute base URL for building email-attached asset links (logo, etc.).
- * Falls back to BASE_URL-relative when no HTTP host is available.
+ * Uses the trusted APP_URL when configured; falls back to a proxy-aware
+ * scheme+host only in non-production, or to BASE_URL-relative if unavailable.
  */
 function hr1AbsBaseUrl(): string
 {
-    if (defined('BASE_URL')) {
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
-        if ($host !== '') {
-            return $scheme . '://' . $host . rtrim(BASE_URL, '/');
-        }
-        return rtrim(BASE_URL, '/');
+    $base = hr1_absolute_base_url();
+    if ($base !== '') {
+        return $base;
     }
-    return '';
+    return defined('BASE_URL') ? rtrim((string) BASE_URL, '/') : '';
 }
 
 /**
@@ -75,7 +87,13 @@ function hr1EmailLogoBlock(): string
         . "</td></tr></table>\n";
 }
 
-define('HR1_SENDMAIL_PATH', 'C:/xampp/sendmail/sendmail.exe');
+/**
+ * DEVELOPMENT-ONLY Windows sendmail.exe fallback path. Used ONLY when no
+ * SMTP_HOST is configured (no production relay), so local XAMPP email tests
+ * keep working. Override via HR1_SENDMAIL_PATH for other dev setups. Never
+ * used as a production transport.
+ */
+define('HR1_SENDMAIL_PATH', getenv('HR1_SENDMAIL_PATH') ?: 'C:/xampp/sendmail/sendmail.exe');
 
 /**
  * Send a raw email through sendmail.exe via proc_open().
@@ -127,6 +145,14 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
         $message = $headers . "\r\n" . $body;
     }
 
+    // Production: direct SMTP relay configured via SMTP_* environment vars.
+    if (SMTP_HOST !== '') {
+        return hr1SendSmtp($toEmail, $message);
+    }
+
+    // ---- DEVELOPMENT-ONLY fallback (no production SMTP configured) ----------
+    // PHP's mail() on Windows ignores sendmail_path and silently drops emails;
+    // the sendmail.exe relay is used only for local development.
     $descriptors = [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
@@ -137,7 +163,7 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
     $process = @proc_open($cmd, $descriptors, $pipes);
 
     if (!is_resource($process)) {
-        error_log('HR1 MAIL: failed to open sendmail process — ' . HR1_SENDMAIL_PATH);
+        hr1MailLog('failed to open dev sendmail process — ' . HR1_SENDMAIL_PATH);
         return false;
     }
 
@@ -153,13 +179,160 @@ function hr1Sendmail(string $toEmail, string $subject, string $body, array $extr
     $exitCode = proc_close($process);
 
     if ($exitCode !== 0) {
-        error_log("HR1 MAIL: sendmail exited with code {$exitCode}"
+        hr1MailLog("dev sendmail exited with code {$exitCode}"
             . ($stderr !== '' ? " stderr: {$stderr}" : '')
             . ($stdout !== '' ? " stdout: {$stdout}" : ''));
         return false;
     }
 
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Minimal SMTP client. Supports implicit TLS (ssl://), STARTTLS and plaintext.
+// On failure the error is logged WITHOUT credentials and false is returned so
+// callers surface a safe generic message.
+// ---------------------------------------------------------------------------
+
+/** Log a mail-related message on one scannable line. Never logs credentials. */
+function hr1MailLog(string $message): void
+{
+    error_log('HR1 MAIL: ' . $message);
+}
+
+/** Read one SMTP server reply (multi-line replies are joined). */
+function hr1SmtpReadLine($fp): string
+{
+    $line = '';
+    $count = 0;
+    while (($ch = @fgets($fp, 512)) !== false) {
+        $line .= $ch;
+        $count++;
+        // A space after the 3-digit code terminates the reply.
+        if ($count > 50 || (strlen($ch) >= 4 && $ch[3] === ' ')) {
+            break;
+        }
+    }
+    return trim($line);
+}
+
+/** Assert the response code of the last server reply. */
+function hr1SmtpExpect($fp, int $expect): bool
+{
+    $line = hr1SmtpReadLine($fp);
+    if ($line === '' || ((int) substr($line, 0, 3)) !== $expect) {
+        hr1MailLog('SMTP unexpected response (expected ' . $expect . '): ' . $line);
+        return false;
+    }
+    return true;
+}
+
+/** Send a command line and expect the given numeric reply code. */
+function hr1SmtpCommand($fp, string $command, int $expect = 250): bool
+{
+    $flat = str_replace(["\r", "\n"], '', $command);
+    @fwrite($fp, $flat . "\r\n");
+    return hr1SmtpExpect($fp, $expect);
+}
+
+/**
+ * Envelope-address value: strip anything that is not a valid address
+ * character so a MAIL FROM:/RCPT TO: can never smuggle header data.
+ */
+function hr1SmtpFlat(string $value): string
+{
+    return trim(preg_replace('/[^\x21-\x7E]/', '', $value));
+}
+
+/**
+ * Send a raw message through the configured SMTP relay.
+ *
+ * @param string $toEmail Recipient address
+ * @param string $message Full message (headers + body), as built by hr1Sendmail()
+ * @return bool true when the relay accepted the message for delivery
+ */
+function hr1SendSmtp(string $toEmail, string $message): bool
+{
+    $host = SMTP_HOST;
+    $port = SMTP_PORT > 0 ? SMTP_PORT : (SMTP_ENCRYPTION === 'ssl' ? 465 : 587);
+    $scheme = SMTP_ENCRYPTION === 'ssl' ? 'ssl' : 'tcp';
+    $timeout = 15;
+
+    $context = stream_context_create([
+        'ssl' => [
+            'verify_peer'       => true,
+            'verify_peer_name'  => true,
+            'allow_self_signed' => false,
+        ],
+    ]);
+
+    $errno = 0;
+    $errstr = '';
+    $fp = @stream_socket_client(
+        $scheme . '://' . $host . ':' . $port,
+        $errno,
+        $errstr,
+        $timeout,
+        STREAM_CLIENT_CONNECT,
+        $context
+    );
+    if ($fp === false) {
+        hr1MailLog("SMTP connect to {$host}:{$port} failed ({$errno} {$errstr})");
+        return false;
+    }
+    stream_set_timeout($fp, $timeout);
+
+    $helo = hr1_hostname() !== '' ? hr1_hostname() : 'localhost';
+
+    $ok = true
+        && hr1SmtpExpect($fp, 220)
+        && hr1SmtpCommand($fp, 'EHLO ' . $helo);
+
+    // STARTTLS upgrade, then negotiate again.
+    if ($ok && SMTP_ENCRYPTION === 'tls') {
+        $ok = hr1SmtpCommand($fp, 'STARTTLS', 220)
+            && (bool) @stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)
+            && hr1SmtpCommand($fp, 'EHLO ' . $helo);
+        if (!$ok) {
+            hr1MailLog('SMTP STARTTLS negotiation failed');
+        }
+    }
+
+    // Authenticate only when credentials were supplied.
+    if ($ok && (SMTP_USER !== '' || SMTP_PASS !== '')) {
+        $ok = hr1SmtpCommand($fp, 'AUTH LOGIN', 334)
+            && hr1SmtpCommand($fp, base64_encode(SMTP_USER), 334)
+            && hr1SmtpCommand($fp, base64_encode(SMTP_PASS), 235);
+        if (!$ok) {
+            hr1MailLog('SMTP authentication failed (credentials are NOT logged)');
+        }
+    }
+
+    $ok = $ok
+        && hr1SmtpCommand($fp, 'MAIL FROM:<' . hr1SmtpFlat(SMTP_FROM) . '>')
+        && hr1SmtpCommand($fp, 'RCPT TO:<' . hr1SmtpFlat($toEmail) . '>')
+        && hr1SmtpCommand($fp, 'DATA', 354);
+
+    if ($ok) {
+        // Dot-stuff every line starting with "." (RFC 5321 §4.5.2).
+        $payload = preg_replace('/^\./m', '..', $message);
+        if ($payload === null || $payload === '') {
+            $payload = $message;
+        }
+        if (substr($payload, -2) !== "\r\n") {
+            $payload .= "\r\n";
+        }
+        @fwrite($fp, $payload . ".\r\n");
+        $ok = hr1SmtpExpect($fp, 250);
+        if (!$ok) {
+            hr1MailLog('SMTP relay rejected the message body');
+        }
+    }
+
+    @hr1SmtpCommand($fp, 'QUIT');
+    fclose($fp);
+
+    return $ok;
 }
 
 /** Minimal HTML → plain-text conversion used only for multipart text fallback. */
@@ -188,9 +361,12 @@ function sendResetApprovedToEmployee(string $toEmail, string $rawToken, string $
         return false;
     }
 
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
-    $resetUrl = $scheme . '://' . $host . BASE_URL . '/auth/reset_password.php?token=' . $rawToken;
+    $base = hr1_absolute_base_url();
+    if ($base === '') {
+        hr1MailLog('password reset email skipped — no trusted APP_URL is configured for the reset link');
+        return false;
+    }
+    $resetUrl = $base . '/auth/reset_password.php?token=' . $rawToken;
 
     $greeting = $employeeName !== '' ? "Hello {$employeeName}," : 'Hello,';
 

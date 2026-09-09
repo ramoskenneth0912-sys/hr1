@@ -32,6 +32,9 @@ $isAjax = strtoupper((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'XM
 
 function respondJson(int $status, array $payload): void
 {
+    if (!array_key_exists('success', $payload)) {
+        $payload['success'] = $status >= 200 && $status < 300;
+    }
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');

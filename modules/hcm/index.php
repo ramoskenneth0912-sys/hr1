@@ -1,8 +1,10 @@
 ﻿<?php
+require_once __DIR__ . '/../../includes/auth.php';
+requireHRorManager();
+
 $pageTitle = 'Core Human Capital Management';
 $currentModule = 'hcm';
 require_once __DIR__ . '/../../includes/header.php';
-requireHRorManager();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
