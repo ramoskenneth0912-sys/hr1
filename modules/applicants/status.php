@@ -18,22 +18,14 @@ csrf_require();
 $id = (int) ($_POST['applicant_id'] ?? 0);
 $newStatus = trim((string) ($_POST['status'] ?? ''));
 
-// Server-side transition map — never trust the frontend to pick an arbitrary
-// status. Each target status may only be reached from the documented source
-// statuses; this enforces the recruitment workflow stages (initial screening →
-// screening passed → exam → final interview → selected → hired).
-//   - accepted / passed_screening / rejected : only from undecided (Pending)
-//   - offered (Selected)                      : only from interview
-//   - hired                                  : only from offered (Selected)
-$transitions = [
-    'accepted'          => ['new', 'screening', 'shortlisted'],
-    'passed_screening'  => ['new', 'screening', 'shortlisted'],
-    'rejected'          => ['new', 'screening', 'shortlisted'],
-    'offered'           => ['interview'],
-    'hired'             => ['offered'],
-];
+// The server-side transition map lives in includes/functions.php
+// (applicationStatusTransitions()). Each target status may only be reached
+// from the documented source statuses; this enforces the recruitment workflow
+// stages (initial screening → screening passed → final interview → selected →
+// hired). 'screening'/'interview' are intentionally absent: they are advanced
+// only by their gated modules (ai_screening.php, interview_create.php).
 
-if ($id <= 0 || !isset($transitions[$newStatus])) {
+if ($id <= 0 || !isset(applicationStatusTransitions()[$newStatus])) {
     flash('danger', 'Invalid status change.');
     redirect(BASE_URL . '/modules/applicants/index.php');
 }
@@ -52,7 +44,7 @@ $oldStatus = $applicant['status'];
 // Enforce the server-side transition rule. This prevents manually crafted
 // requests from skipping stages (e.g. flipping a Screening applicant straight
 // to Selected/Hired, or moving an Accepted application to Rejected).
-if (!in_array($oldStatus, $transitions[$newStatus], true)) {
+if (!canTransitionApplicationStatus((string) $oldStatus, $newStatus)) {
     flash('danger', 'This applicant cannot be moved to that status from their current stage.');
     redirect(BASE_URL . '/modules/applicants/view.php?id=' . $id);
 }

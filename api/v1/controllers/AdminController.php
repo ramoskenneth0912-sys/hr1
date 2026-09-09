@@ -44,6 +44,14 @@ class AdminController
             Response::validation(['status' => 'Required. One of: pending/new, reviewing/screening, shortlisted, interview, accepted/offered, hired, rejected.']);
         }
 
+        // Same stage-change gate as the web status.php: only transitions allowed
+        // by the shared map are permitted (screening/interview are set exclusively
+        // through their gated flows). Without this, the API could move an
+        // applicant from 'new' straight to 'hired'.
+        if (!canTransitionApplicationStatus((string) ($app['status'] ?? ''), $norm)) {
+            Response::validation(['status' => 'This applicant cannot be moved to that status from their current stage.']);
+        }
+
         db()->prepare('UPDATE applicants SET status = :s, updated_at = NOW() WHERE id = :id')
             ->execute([':s' => $norm, ':id' => $id]);
 

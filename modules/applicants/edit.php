@@ -56,8 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Server-side whitelist — never trust the frontend to pick an arbitrary status.
     $newStatus = trim($_POST['status'] ?? '');
-    $allowedStatuses = ['new', 'screening', 'shortlisted', 'accepted', 'passed_screening', 'interview', 'offered', 'hired', 'rejected'];
-    if (!in_array($newStatus, $allowedStatuses, true)) {
+    if (!array_key_exists($newStatus, applicationStatuses())) {
         flash('danger', 'Invalid status value.');
         redirect(BASE_URL . '/modules/applicants/index.php');
     }
@@ -65,6 +64,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $oldStmt = db()->prepare('SELECT status FROM applicants WHERE id = ?');
     $oldStmt->execute([$id]);
     $oldStatus = ($prev = $oldStmt->fetch()) ? $prev['status'] : null;
+
+    // Enforce the recruitment workflow stage machine: a status change is only
+    // allowed when the target is reachable from the applicant's current stage
+    // (see canTransitionApplicationStatus()). This stops crafted requests from
+    // skipping pipeline steps — e.g. moving a Pending applicant straight to
+    // Hired, or regressing a Hired/Selected applicant to Under Review.
+    if ($oldStatus !== null && $newStatus !== $oldStatus
+        && !canTransitionApplicationStatus((string) $oldStatus, $newStatus)) {
+        flash('danger', 'This applicant cannot be moved to that status from their current stage.');
+        redirect(BASE_URL . '/modules/applicants/view.php?id=' . $id);
+    }
 
     $stmt = db()->prepare(
         'UPDATE applicants SET first_name=?, last_name=?, email=?, phone=?, address=?,

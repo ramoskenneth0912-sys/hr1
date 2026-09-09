@@ -64,13 +64,13 @@ CALL sp_add_column_if_missing('job_postings', 'job_employment_type',   "ENUM('re
 DROP PROCEDURE IF EXISTS sp_add_column_if_missing;
 
 -- ============================================================
--- 3. DEFAULT ADMIN USER
---    Password: admin123  (bcrypt via PHP password_hash)
+-- 3. ADMIN USER CREATION
+--    SECURITY: The former seed block that created a DEFAULT ADMIN USER with
+--    the well-known password 'admin123' was REMOVED (2026-09-09) so this file
+--    can never create a backdoor account if run against a live database.
+--    Baseline production admin/HR accounts must be created only via the CLI
+--    script:  php database/create_admin.php  (CSPRNG password, printed once).
 -- ============================================================
-INSERT INTO users (username, email, password_hash, role)
-SELECT 'admin', 'admin@company.com', '$2y$10$WtZRPj1oZVqOXGQLBS6YfusG1L7IfXQM/In9H7619uyMRxRvrbQR2', 'hr'
-FROM DUAL
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin' OR email = 'admin@company.com');
 
 -- ============================================================
 -- 4. SEED SAMPLE JOB POSTINGS (idempotent)
@@ -152,10 +152,13 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 -- ============================================================
--- 6. SEED TEST APPLICANT USER (password: applicant123)
+-- 6. TEST APPLICANT USER
+--    SECURITY: The former seed block that created a default TEST APPLICANT
+--    account with the well-known password 'applicant123' was REMOVED
+--    (2026-09-09). Known-password test accounts must never be seeded into a
+--    database that can be promoted to production. Create applicant accounts
+--    through the application (or, in dev only, with a one-time random password).
 -- ============================================================
-INSERT IGNORE INTO users (username, email, password_hash, role, is_active) VALUES
-    ('applicant', 'applicant@test.com', '$2y$10$rnGHlE.hFwfdq4qWtgw8Ru.ZvKBlvjPipOApc9/pDHdCKSD7g.cCy', 'applicant', 1);
 
 -- ============================================================
 -- 7. ADD user_id TO applicants TABLE (link applications to accounts)

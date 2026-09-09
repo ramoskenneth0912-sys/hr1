@@ -21,6 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(BASE_URL . '/modules/onboarding/index.php');
     }
 
+    // Server-side gate: onboarding is only valid for applicants who were
+    // actually Hired. The list page filters to status='hired', but every POST
+    // action here must re-verify it so a crafted request cannot drive a
+    // non-hired applicant through orientation/document/employee-account steps.
+    if (($applicant['status'] ?? '') !== 'hired') {
+        flash('danger', 'Onboarding is only available for hired applicants.');
+        redirect(BASE_URL . '/modules/onboarding/index.php');
+    }
+
     if ($action === 'start_onboarding') {
         getOrCreateOnboardingProgress($id);
         securityLog('onboarding_started', "applicant_id={$id}", $_SESSION['user_id']);

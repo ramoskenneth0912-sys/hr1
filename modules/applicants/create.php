@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim($_POST['address'] ?? ''),
             $positionApplied,
             $_POST['department_id'] ?: null,
-            $_POST['status'] ?? 'new',
+            'new',
             $appliedDate,
             trim($_POST['notes'] ?? ''),
         ]);
@@ -116,11 +116,8 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
         <div class="form-group">
             <label for="status">Status</label>
-            <select id="status" name="status">
-                <?php foreach (['new','screening','interview','offered','hired','rejected'] as $s): ?>
-                <option value="<?= $s ?>" <?= ($_POST['status'] ?? 'new') === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
-                <?php endforeach; ?>
-            </select>
+            <input type="text" id="status" value="New" disabled>
+            <small style="display:block;color:var(--muted);margin-top:.25rem;">New applicants always start at "New". Advancing to later stages is done through the recruitment workflow.</small>
         </div>
         <div class="form-group full-width">
             <label for="address">Address</label>

@@ -239,6 +239,36 @@ function applicationStatuses(): array
 }
 
 /**
+ * Server-side application-status transition map — enforces the recruitment
+ * workflow (initial screening → passed → final interview → selected → hired).
+ * Each target status may only be reached from the documented source statuses.
+ *
+ * 'screening' is intentionally NOT managed here: it is advanced only by the
+ * gated AI-screening flow (ai_screening.php). 'interview' is also excluded:
+ * it is reachable only through interview_create.php, which enforces the
+ * exam-eligibility gate. Generic status handlers must not bypass those gates.
+ */
+function applicationStatusTransitions(): array
+{
+    return [
+        'shortlisted'       => ['new', 'screening'],
+        'accepted'          => ['new', 'screening', 'shortlisted'],
+        'passed_screening'  => ['new', 'screening', 'shortlisted'],
+        'rejected'          => ['new', 'screening', 'shortlisted'],
+        'offered'           => ['interview'],
+        'hired'             => ['offered'],
+    ];
+}
+
+/** Whether an applicant may move from $fromStatus to $toStatus. */
+function canTransitionApplicationStatus(string $fromStatus, string $toStatus): bool
+{
+    $transitions = applicationStatusTransitions();
+    return isset($transitions[$toStatus])
+        && in_array($fromStatus, $transitions[$toStatus], true);
+}
+
+/**
  * Create a notification for one user account. Fails silently —
  * a notification must never break an HR workflow.
  */
