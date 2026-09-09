@@ -15,9 +15,15 @@
  *     to the server log and returns a generic message.
  *
  * FILTERS (all optional, validated server-side)
- *   period   : daily | monthly | yearly          (default: monthly)
- *   year     : 4-digit year, clamped to data range (default: latest year)
- *   position : '' (All Jobs) or an existing position name (default: '')
+ *   period      : daily | monthly | yearly          (default: monthly)
+ *   year        : 4-digit year, clamped to data range (default: latest year)
+ *   position_id : '' (All Positions) or an existing job_postings.id (default: '')
+ *
+ * Job positions are always resolved from job_postings by their stable id and
+ * shown with their *current* title, so renaming a posting (e.g. "Kargador" →
+ * "Warehouse Associate") never leaves a stale name behind and never severs the
+ * link to existing applicant statistics. applicants.job_posting_id is the
+ * relationship used for filtering — never the editable title text.
  *
  * All aggregation is done in SQL with COUNT + GROUP BY over applicants,
  * grouped by the actual application submission date (applicants.applied_date).
@@ -44,16 +50,26 @@ try {
     $pdo = db();
 
     // ---- Available job positions (dynamic, driven by the database) ---------
-    // Union of job_postings titles and the free-text position_applied values so
-    // a position is listable if it is posted and/or has applicants.
+    // Source of truth is job_postings only (stable id + current title). The
+    // old free-text applicants.position_applied values are intentionally NOT
+    // included here — a renamed posting would otherwise resurface its old name.
+    // Removed/soft-deleted postings (status = 'inactive') are excluded so they
+    // never appear as an active option, while their applicant history remains
+    // intact via job_posting_id.
     $positionRows = $pdo->query(
-        "SELECT title FROM job_postings WHERE title IS NOT NULL AND TRIM(title) <> ''
-         UNION
-         SELECT position_applied FROM applicants
-         WHERE position_applied IS NOT NULL AND TRIM(position_applied) <> ''
-         ORDER BY title ASC"
+        "SELECT id, title FROM job_postings
+         WHERE title IS NOT NULL AND TRIM(title) <> ''
+           AND COALESCE(status, '') <> 'inactive'
+         ORDER BY TRIM(title) ASC"
     )->fetchAll();
-    $positions = array_values(array_filter(array_map('trim', array_column($positionRows, 'title'))));
+    $positions = [];
+    $titleById = [];
+    foreach ($positionRows as $r) {
+        $id = (int) $r['id'];
+        $title = trim($r['title']);
+        $positions[] = ['id' => $id, 'title' => $title];
+        $titleById[$id] = $title;
+    }
 
     // ---- Data range (min/max application date) -----------------------------
     $range = $pdo->query('SELECT MIN(applied_date) mn, MAX(applied_date) mx FROM applicants')->fetch();
@@ -72,10 +88,10 @@ try {
     if ($minDate && $year < (int) date('Y', strtotime($minDate))) $year = (int) date('Y', strtotime($minDate));
     if ($maxDate && $year > (int) date('Y', strtotime($maxDate))) $year = (int) date('Y', strtotime($maxDate));
 
-    $position = trim((string) ($_GET['position'] ?? ''));
-    if ($position !== '' && !in_array($position, $positions, true)) {
-        $position = '';
-    }
+    $positionIdInput = trim((string) ($_GET['position_id'] ?? ''));
+    $positionId = ($positionIdInput !== '' && ctype_digit($positionIdInput) && isset($titleById[(int) $positionIdInput]))
+        ? (int) $positionIdInput
+        : 0; // 0 = All Positions (also covers a posting that was deleted)
 
     // ---- Timezone (application-configured, default Asia/Manila) -----------
     $appTimezone = 'Asia/Manila';
@@ -146,9 +162,9 @@ try {
                           AND updated_at >= ? AND updated_at < ?';
                 $paramsF = [$monthStart, $monthNext];
             }
-            if ($position !== '') {
-                $sql .= ' AND position_applied = ?';
-                $paramsF[] = $position;
+            if ($positionId !== 0) {
+                $sql .= ' AND job_posting_id = ?';
+                $paramsF[] = $positionId;
             }
             $stmt = $pdo->prepare($sql);
             $stmt->execute($paramsF);
@@ -177,9 +193,9 @@ try {
         $where .= ' AND YEAR(applied_date) = ?';
         $params[] = $year;
     }
-    if ($position !== '') {
-        $where .= ' AND position_applied = ?';
-        $params[] = $position;
+    if ($positionId !== 0) {
+        $where .= ' AND job_posting_id = ?';
+        $params[] = $positionId;
     }
 
     // ---- Aggregated series (recruitment funnel per period) ----------------
@@ -233,7 +249,7 @@ try {
     if ($period !== 'yearly') {
         $pdWhere  = ' WHERE YEAR(applied_date) = ?';
         $pdParams = [$year];
-        if ($position !== '') { $pdWhere .= ' AND position_applied = ?'; $pdParams[] = $position; }
+        if ($positionId !== 0) { $pdWhere .= ' AND job_posting_id = ?'; $pdParams[] = $positionId; }
         $pdr = $pdo->prepare(
             "SELECT applied_date FROM applicants $pdWhere
              GROUP BY applied_date ORDER BY COUNT(*) DESC, applied_date ASC LIMIT 1"
@@ -254,7 +270,7 @@ try {
     if ($period !== 'yearly') {
         $pmWhere  = ' WHERE YEAR(applied_date) = ?';
         $pmParams = [$year];
-        if ($position !== '') { $pmWhere .= ' AND position_applied = ?'; $pmParams[] = $position; }
+        if ($positionId !== 0) { $pmWhere .= ' AND job_posting_id = ?'; $pmParams[] = $positionId; }
         $pmr = $pdo->prepare(
             "SELECT DATE_FORMAT(applied_date, '%Y-%m') AS m FROM applicants $pmWhere
              GROUP BY DATE_FORMAT(applied_date, '%Y-%m') ORDER BY COUNT(*) DESC, m ASC LIMIT 1"
@@ -270,14 +286,20 @@ try {
         }
     }
 
-    // Most applied position (respect the position filter scope for "total")
+    // Most applied position (respect the position filter scope for "total").
+    // The label uses the posting's CURRENT title via job_posting_id, falling
+    // back to the recorded free-text only for applicants not linked to a posting.
     $mpWhere  = ' WHERE 1=1';
     $mpParams = [];
-    if ($period !== 'yearly') { $mpWhere .= ' AND YEAR(applied_date) = ?'; $mpParams[] = $year; }
-    if ($position !== '') { $mpWhere .= ' AND position_applied = ?'; $mpParams[] = $position; }
+    if ($period !== 'yearly') { $mpWhere .= ' AND YEAR(a.applied_date) = ?'; $mpParams[] = $year; }
+    if ($positionId !== 0) { $mpWhere .= ' AND a.job_posting_id = ?'; $mpParams[] = $positionId; }
     $mpr = $pdo->prepare(
-        "SELECT position_applied, COUNT(*) AS c FROM applicants $mpWhere
-         GROUP BY position_applied ORDER BY COUNT(*) DESC, position_applied ASC LIMIT 1"
+        "SELECT COALESCE(j.title, a.position_applied) AS label, COUNT(*) AS c
+         FROM applicants a
+         LEFT JOIN job_postings j ON j.id = a.job_posting_id
+         $mpWhere
+         GROUP BY COALESCE(j.title, a.position_applied)
+         ORDER BY COUNT(*) DESC, label ASC LIMIT 1"
     );
     $mpr->execute($mpParams);
     $mp = $mpr->fetch();
@@ -286,7 +308,7 @@ try {
         'ok'        => true,
         'period'    => $period,
         'year'      => $year,
-        'position'  => $position,
+        'position_id' => $positionId,
         'positions' => $positions,
         'range'     => ['min' => $minDate, 'max' => $maxDate],
         'total'     => $total,
@@ -301,7 +323,7 @@ try {
         'peak'      => [
             'day'    => $peakDay['label'] ? ['label' => $peakDay['label'], 'count' => $peakDay['count']] : null,
             'month'  => $peakMonth['label'] ? ['label' => $peakMonth['label'], 'count' => $peakMonth['count']] : null,
-            'position' => $mp ? ['label' => $mp['position_applied'], 'count' => (int) $mp['c']] : null,
+            'position' => $mp ? ['label' => $mp['label'], 'count' => (int) $mp['c']] : null,
         ],
     ]);
 } catch (Throwable $e) {

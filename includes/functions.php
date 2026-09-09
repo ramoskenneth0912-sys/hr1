@@ -195,6 +195,7 @@ function statusBadge(string $status): string
         'rejected' => 'badge-danger',
         'open' => 'badge-success',
         'closed' => 'badge-danger',
+        'inactive' => 'badge-secondary',
         'pending' => 'badge-warning',
         'in_progress' => 'badge-info',
         'completed' => 'badge-success',

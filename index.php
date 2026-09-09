@@ -412,12 +412,29 @@ if (isHRorManager()) {
     var AXIS_TXT   = '#C4CDE8';
 
     // Populate the job-position dropdown dynamically from the data response.
+    // Options carry the stable job_posting id as the value and the CURRENT
+    // title from job_postings as the label, so a rename (e.g. Kargador →
+    // Warehouse Associate) shows the new name while keeping the same id.
+    // Returns true when the previously selected job no longer exists, in which
+    // case the filter is reset to "All Positions".
     function fillPositions(posList) {
-        var opts = '<option value="">All Jobs</option>';
+        var current = posSel.value;
+        var opts = '<option value="">All Positions</option>';
         (posList || []).forEach(function (p) {
-            opts += '<option value="' + esc(p) + '">' + esc(p) + '</option>';
+            opts += '<option value="' + Number(p.id) + '">' + esc(p.title) + '</option>';
         });
         posSel.innerHTML = opts;
+        if (current === '') {
+            posSel.value = '';
+            return false;
+        }
+        var stillThere = (posList || []).some(function (p) { return Number(p.id) === Number(current); });
+        if (!stillThere) {
+            posSel.value = '';
+            return true;
+        }
+        posSel.value = current;
+        return false;
     }
 
     // Populate the year dropdown from the data range.
@@ -565,7 +582,7 @@ if (isHRorManager()) {
         funnelWrap.innerHTML = '<div class="recruit-funnel-loading">Loading&hellip;</div>';
         var qs = 'view=funnel';
         if (funnelMonth) { qs += '&month=' + encodeURIComponent(funnelMonth); }
-        if (posSel && posSel.value) { qs += '&position=' + encodeURIComponent(posSel.value); }
+        if (posSel && posSel.value) { qs += '&position_id=' + encodeURIComponent(posSel.value); }
         fetch(BASE + '/modules/dashboard/stats_data.php?' + qs, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -699,7 +716,7 @@ if (isHRorManager()) {
         wrap.innerHTML = '<div class="stats-loading">Loading statistics&hellip;</div>';
         var qs = 'period=' + encodeURIComponent(periodSel.value) +
                  '&year=' + encodeURIComponent(yearSel.value) +
-                 '&position=' + encodeURIComponent(posSel.value);
+                 '&position_id=' + encodeURIComponent(posSel.value);
         fetch(BASE + '/modules/dashboard/stats_data.php?' + qs, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -708,7 +725,9 @@ if (isHRorManager()) {
             return r.json();
         }).then(function (data) {
             if (!data.ok) { errorHandler(); return; }
-            fillPositions(data.positions);
+            // Reset to "All Positions" (and sync the funnel) if the selected
+            // job posting was deleted while the page was open.
+            var deleted = fillPositions(data.positions);
             fillYears(data.range && data.range.min, data.range && data.range.max);
             yearWrap.style.visibility = (data.period === 'yearly') ? 'hidden' : '';
             renderInsights(data.peak);
@@ -717,6 +736,7 @@ if (isHRorManager()) {
             if (!funnels.length || !anyVal) { emptyHandler(); return; }
             state.hidden = true;
             renderChart(data.labels, funnels[0].values);
+            if (deleted) { loadFunnel(); }
         }).catch(function () {
             errorHandler();
         });
@@ -798,6 +818,22 @@ if (isHRorManager()) {
     yearSel.innerHTML = '<option value="">…</option>';
     load();
     loadFunnel();
+
+    // Re-fetch the latest job-position list when the user returns to the page
+    // (e.g. after an HR/Admin renames a posting in another tab). Light debounce,
+    // no polling. load()/loadFunnel() preserve the current selection by id, so
+    // a rename shows the new title while keeping the same job selected.
+    var lastRefresh = Date.now();
+    function refreshStatsOnVisible() {
+        if (document.hidden) return;
+        var now = Date.now();
+        if (now - lastRefresh < 2000) return;
+        lastRefresh = now;
+        load();
+        loadFunnel();
+    }
+    document.addEventListener('visibilitychange', refreshStatsOnVisible);
+    window.addEventListener('focus', refreshStatsOnVisible);
 })();
 </script>
 
