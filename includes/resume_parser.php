@@ -193,8 +193,8 @@ function diagnoseResumeReadFailure(string $filePath, string $extractedText = '')
             if (!$ocr['ok']) {
                 return [
                     'ok'     => false,
-                    'reason' => 'The PDF could not be read as text, and OCR is not available on this server.',
-                    'hint'   => $ocr['hint'] . ' Scanned or image-only PDFs need Tesseract OCR to be readable.',
+                    'reason' => 'Resume could not be analyzed',
+                    'hint'   => 'The uploaded resume could not be read for text-based AI screening. Please review the resume manually or upload a text-readable PDF.',
                 ];
             }
             return [

@@ -73,11 +73,6 @@
         </div>
 
         <div class="form-group full-width">
-          <label for="requirements">Requirements</label>
-          <textarea id="requirements" v-model="form.requirements" rows="3" placeholder="Required qualifications and skills..."></textarea>
-        </div>
-
-        <div class="form-group full-width">
           <label for="qualifications">Qualifications</label>
           <textarea id="qualifications" v-model="form.qualifications" rows="3" placeholder="Education and experience requirements..."></textarea>
         </div>
@@ -112,7 +107,6 @@ const form = reactive({
   title: '',
   department_id: '',
   description: '',
-  requirements: '',
   qualifications: '',
   required_skills: '',
   education_requirement: '',
@@ -143,7 +137,6 @@ onMounted(async () => {
       form.title = job.title || ''
       form.department_id = job.department_id || ''
       form.description = job.description || ''
-      form.requirements = job.requirements || ''
       form.qualifications = job.qualifications || ''
       form.required_skills = job.required_skills || ''
       form.education_requirement = job.education_requirement || ''

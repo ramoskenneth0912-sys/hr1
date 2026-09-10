@@ -61,11 +61,8 @@ require_once __DIR__ . '/../../includes/header.php';
     <p style="color:var(--muted);margin:.25rem 0 1rem;">An AI match result could not be produced for this applicant. This can happen when the resume cannot be read (unsupported/corrupt file) or the screening service was temporarily unreachable. The application itself is unaffected — only the match analysis is missing.</p>
     <?php if (!empty($screening['error_message'])): ?>
         <div class="alert alert-warning" style="margin:.5rem 0 1rem;">
-            <strong>Reason:</strong> <?= e($screening['error_message']) ?>
+            <strong><?= e($screening['error_message']) ?></strong>
         </div>
-    <?php endif; ?>
-    <?php $ocrCheck = ocrAvailabilityCheck(); if (!$ocrCheck['ok']): ?>
-        <p style="color:var(--danger);margin:.25rem 0 1rem;"><strong>Server notice:</strong> <?= e($ocrCheck['reason']) ?>. <?= e($ocrCheck['hint']) ?></p>
     <?php endif; ?>
     <form method="post" action="screening.php" style="margin:0;display:inline;">
         <?= csrf_field() ?>

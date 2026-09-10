@@ -232,13 +232,6 @@ $icons = [
             </div>
         <?php endif; ?>
 
-        <?php if (!empty($job['requirements'])): ?>
-            <div class="panel detail-section">
-                <h2>Requirements</h2>
-                <p><?= nl2br(e($job['requirements'])) ?></p>
-            </div>
-        <?php endif; ?>
-
         <?php if (!empty($job['qualifications'])): ?>
             <div class="panel detail-section">
                 <h2>Qualifications</h2>

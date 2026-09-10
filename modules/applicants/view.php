@@ -283,10 +283,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
     <p style="color:var(--muted);margin:0 0 .75rem;">An AI match result is currently unavailable for this applicant. This can happen when a resume cannot be read or when the screening service is temporarily unreachable. The application itself was not affected.</p>
     <?php if (!empty($screening['error_message'])): ?>
-        <p style="color:var(--danger);margin:0 0 .75rem;"><strong>Reason:</strong> <?= e($screening['error_message']) ?></p>
-    <?php endif; ?>
-    <?php $ocrCheck = ocrAvailabilityCheck(); if (!$ocrCheck['ok']): ?>
-        <p style="color:var(--danger);margin:0;"><strong>Server notice:</strong> <?= e($ocrCheck['reason']) ?>. <?= e($ocrCheck['hint']) ?></p>
+        <p style="color:var(--danger);margin:0;"><strong><?= e($screening['error_message']) ?></strong></p>
     <?php endif; ?>
 </section>
 <?php endif; ?>

@@ -328,17 +328,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <?php
-        require_once __DIR__ . '/../includes/resume_parser.php';
-        $ocrCheck = ocrAvailabilityCheck();
-        if (!$ocrCheck['ok']): ?>
-            <div class="alert alert-warning">
-                <strong>OCR not available on this server.</strong> Uploaded resumes are checked
-                for readable text; resumes saved as images (scanned/photo PDFs) may not be
-                analyzable until Tesseract OCR is installed. <?= e($ocrCheck['reason']) ?>
-            </div>
-        <?php endif; ?>
-
         <div class="form-panel">
             <form method="post" action="apply.php?id=<?= (int)$job['id'] ?>" enctype="multipart/form-data">
                 <?= csrf_field() ?>
