@@ -109,6 +109,7 @@ require_once __DIR__ . '/controllers/GoalsController.php';
 require_once __DIR__ . '/controllers/PerformanceController.php';
 require_once __DIR__ . '/controllers/CompetenciesController.php';
 require_once __DIR__ . '/controllers/DevelopmentController.php';
+require_once __DIR__ . '/controllers/RecognitionController.php';
 require_once __DIR__ . '/controllers/ApiKeysController.php';
 require_once __DIR__ . '/controllers/ExamResultsController.php';
 require_once __DIR__ . '/controllers/ExamProvisioningController.php';
@@ -297,10 +298,28 @@ try {
         }
     }
 
+    // ---------------- /employee/recognition ------------------------------
+    // Published HR-owned records; employees have read-only access to their
+    // own records through the controller's authenticated employee scope.
+    if ($res === 'employee' && ($segments[1] ?? '') === 'recognition') {
+        switch (true) {
+            case $method === 'GET' && count($segments) === 2:
+                RecognitionController::index();
+            default:
+                Response::error('Method not allowed for this endpoint.', [], 405);
+        }
+    }
+
     // ---------------- /admin -------------------------------------------------------------
     // [user] endpoints — admin operations require Bearer/session auth.
     if ($res === 'admin') {
         switch (true) {
+            case $method === 'POST' && ($segments[1] ?? '') === 'recognition' && count($segments) === 2:
+                RecognitionController::store();
+            case in_array($method, ['PUT', 'PATCH'], true)
+                && ($segments[1] ?? '') === 'recognition'
+                && $id2 !== null && count($segments) === 3:
+                RecognitionController::update($id2);
             case $method === 'GET' && ($segments[1] ?? '') === 'stats' && count($segments) === 2:
                 AdminController::stats();
             case in_array($method, ['PUT', 'PATCH', 'GET'], true)
