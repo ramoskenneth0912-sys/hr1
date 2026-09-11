@@ -108,6 +108,7 @@ require_once __DIR__ . '/controllers/DepartmentsController.php';
 require_once __DIR__ . '/controllers/GoalsController.php';
 require_once __DIR__ . '/controllers/PerformanceController.php';
 require_once __DIR__ . '/controllers/CompetenciesController.php';
+require_once __DIR__ . '/controllers/DevelopmentController.php';
 require_once __DIR__ . '/controllers/ApiKeysController.php';
 require_once __DIR__ . '/controllers/ExamResultsController.php';
 require_once __DIR__ . '/controllers/ExamProvisioningController.php';
@@ -124,6 +125,7 @@ $res = $segments[0] ?? null;
 $id1 = isset($segments[1]) && ctype_digit($segments[1]) ? (int) $segments[1] : null;
 $id2 = isset($segments[2]) && ctype_digit($segments[2]) ? (int) $segments[2] : null;
 $id3 = isset($segments[3]) && ctype_digit($segments[3]) ? (int) $segments[3] : null;
+$id4 = isset($segments[4]) && ctype_digit($segments[4]) ? (int) $segments[4] : null;
 $seg2 = $segments[2] ?? null;
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -265,6 +267,31 @@ try {
                 CompetenciesController::index();
             case $method === 'GET' && $id2 !== null && count($segments) === 3:
                 CompetenciesController::show($id2);
+            default:
+                Response::error('Method not allowed for this endpoint.', [], 405);
+        }
+
+    }
+
+    // ---------------- /employee/development --------------------------------
+    // Employee-owned development plans and roadmap activities. Ownership is
+    // resolved from the authenticated user's employee record.
+    if ($res === 'employee' && ($segments[1] ?? '') === 'development') {
+        switch (true) {
+            case $method === 'GET' && count($segments) === 2:
+                DevelopmentController::index();
+            case $method === 'POST' && count($segments) === 2:
+                DevelopmentController::store();
+            case in_array($method, ['PUT', 'PATCH'], true) && $id2 !== null && count($segments) === 3:
+                DevelopmentController::update($id2);
+            case $method === 'POST' && $id2 !== null && ($segments[3] ?? '') === 'activities' && count($segments) === 4:
+                DevelopmentController::storeActivity($id2);
+            case in_array($method, ['PUT', 'PATCH'], true)
+                && $id2 !== null
+                && ($segments[3] ?? '') === 'activities'
+                && $id4 !== null
+                && count($segments) === 5:
+                DevelopmentController::updateActivity($id2, $id4);
             default:
                 Response::error('Method not allowed for this endpoint.', [], 405);
         }
