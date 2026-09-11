@@ -43,6 +43,7 @@ if (isHRorManager()) {
         ['id' => 'hcm', 'label' => 'Core HCM', 'url' => BASE_URL . '/modules/hcm/index.php', 'icon' => 'building', 'children' => [
             ['id' => 'employee-management', 'label' => 'Employee Management', 'url' => BASE_URL . '/modules/hcm/index.php', 'icon' => 'building'],
             ['id' => 'goals', 'label' => 'Goals', 'url' => BASE_URL . '/modules/hcm/goals.php', 'icon' => 'target'],
+            ['id' => 'performance', 'label' => 'Performance', 'url' => BASE_URL . '/modules/hcm/performance.php', 'icon' => 'activity'],
             ['id' => 'records', 'label' => 'Records', 'url' => BASE_URL . '/modules/records/index.php', 'icon' => 'folder'],
             ['id' => 'recognition', 'label' => 'Recognition', 'url' => BASE_URL . '/modules/hcm/recognition.php', 'icon' => 'award'],
         ]],
