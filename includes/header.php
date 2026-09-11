@@ -60,6 +60,15 @@ if (isHRorManager()) {
         ['id' => 'leave-requests', 'label' => 'Leave Requests', 'url' => BASE_URL . '/modules/employee/leave.php', 'icon' => 'checklist'],
         ['id' => 'my-salary', 'label' => 'My Salary', 'url' => BASE_URL . '/modules/employee/salary.php', 'icon' => 'briefcase'],
     ];
+    $navSections['MY CAREER'] = [
+        ['id' => 'my-goals', 'label' => 'My Goals', 'url' => BASE_URL . '/modules/employee/goals.php', 'icon' => 'target'],
+        ['id' => 'my-performance', 'label' => 'My Performance', 'url' => BASE_URL . '/modules/employee/performance.php', 'icon' => 'activity'],
+        ['id' => 'my-competencies', 'label' => 'My Competencies', 'url' => BASE_URL . '/modules/employee/competencies.php', 'icon' => 'layers'],
+        ['id' => 'my-trainings', 'label' => 'My Trainings', 'url' => BASE_URL . '/modules/employee/trainings.php', 'icon' => 'book'],
+        ['id' => 'my-learning', 'label' => 'My Learning', 'url' => BASE_URL . '/modules/employee/learning.php', 'icon' => 'graduation-cap'],
+        ['id' => 'my-development', 'label' => 'My Development', 'url' => BASE_URL . '/modules/employee/development.php', 'icon' => 'rocket'],
+        ['id' => 'my-recognition', 'label' => 'My Recognition', 'url' => BASE_URL . '/modules/employee/recognition.php', 'icon' => 'award'],
+    ];
     $navSections['COMMUNICATION'] = [
         ['id' => 'notifications', 'label' => 'Notifications', 'url' => BASE_URL . '/modules/employee/notifications.php', 'icon' => 'bell'],
     ];
@@ -94,7 +103,7 @@ $notifItems = $notifData['items'];
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=5">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=6">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/tailwind.css">
 </head>
 <body class="<?= e($bodyClass) ?>">

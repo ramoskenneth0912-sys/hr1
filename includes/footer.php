@@ -2,6 +2,7 @@
     </div>
 </div>
 <?php if (!empty($reactEntry)): ?>
+<?php require_once __DIR__ . '/react.php'; ?>
 <?= react_asset_tags((string) $reactEntry) ?>
 <?php endif; ?>
 <script>

@@ -35,6 +35,39 @@
  *
  *   GET    departments                     → DepartmentsController::index (hr/manager)
  *
+ *   GET    employee/goals                  → GoalsController::index   (employee, own goals)
+ *   PATCH  employee/goals/{id}             → GoalsController::update  (employee, own goal)
+ *
+ *   GET    employee/competencies                  → CompetenciesController::index   (employee, own competencies)
+ *   GET    employee/competencies/{id}             → CompetenciesController::show    (employee, own competency)
+ *
+ *   GET    employee/performance            → PerformanceController::index  (employee, own reviews)
+ *   GET    employee/performance/{id}       → PerformanceController::show
+ *   PATCH  employee/performance/{id}/self-assessment → PerformanceController::saveSelfAssessmentDraft
+ *   POST   employee/performance/{id}/self-assessment → PerformanceController::submitSelfAssessment
+ *   POST   employee/performance/{id}/acknowledge     → PerformanceController::acknowledge
+ *
+ *   GET    admin/performance/periods                  → PerformanceController::periods      (hr/manager)
+ *   POST   admin/performance/periods                  → PerformanceController::createPeriod (hr only)
+ *   GET    admin/performance/options?employee_id=     → PerformanceController::options      (hr/manager)
+ *   GET    admin/performance/reviews                  → PerformanceController::adminIndex   (hr/manager, scoped)
+ *   POST   admin/performance/reviews                  → PerformanceController::store        (hr/manager, scoped)
+ *   GET    admin/performance/reviews/{id}             → PerformanceController::adminShow
+ *   PATCH/PUT admin/performance/reviews/{id}          → PerformanceController::adminUpdate
+ *   PUT    admin/performance/reviews/{id}/goal-results → PerformanceController::scoreGoals
+ *   PUT    admin/performance/reviews/{id}/manager-feedback → PerformanceController::managerFeedback
+ *
+ *   GET    admin/competencies                     → CompetenciesController::catalogIndex   (hr/manager)
+ *   POST   admin/competencies                     → CompetenciesController::catalogStore   (hr only)
+ *   GET    admin/competencies/{id}                → CompetenciesController::catalogShow
+ *   PUT/PATCH admin/competencies/{id}             → CompetenciesController::catalogUpdate  (hr only)
+ *   DELETE admin/competencies/{id}                → CompetenciesController::catalogDestroy (hr only, archive)
+ *   GET    admin/competencies/employees           → CompetenciesController::assignmentsIndex   (hr/manager, scoped)
+ *   POST   admin/competencies/employees           → CompetenciesController::assignmentsStore   (hr only)
+ *   GET    admin/competencies/employees/{id}      → CompetenciesController::assignmentsShow
+ *   PUT/PATCH admin/competencies/employees/{id}   → CompetenciesController::assignmentsUpdate (hr full; manager evaluation)
+ *   DELETE admin/competencies/employees/{id}      → CompetenciesController::assignmentsDestroy (hr only)
+ *
  *   POST   exams                          → ExamProvisioningController::provision (HR3 → HR1 exam ingest; exams:write)
  *   GET    exams                          → ExamProvisioningController::list     (exams:read)
  *   GET    exams/{id}                     → ExamProvisioningController::show     (exams:read)
@@ -72,6 +105,9 @@ require_once __DIR__ . '/controllers/ApplicationsController.php';
 require_once __DIR__ . '/controllers/UsersController.php';
 require_once __DIR__ . '/controllers/AdminController.php';
 require_once __DIR__ . '/controllers/DepartmentsController.php';
+require_once __DIR__ . '/controllers/GoalsController.php';
+require_once __DIR__ . '/controllers/PerformanceController.php';
+require_once __DIR__ . '/controllers/CompetenciesController.php';
 require_once __DIR__ . '/controllers/ApiKeysController.php';
 require_once __DIR__ . '/controllers/ExamResultsController.php';
 require_once __DIR__ . '/controllers/ExamProvisioningController.php';
@@ -87,6 +123,7 @@ $segments = route_path() === '' ? [] : explode('/', route_path());
 $res = $segments[0] ?? null;
 $id1 = isset($segments[1]) && ctype_digit($segments[1]) ? (int) $segments[1] : null;
 $id2 = isset($segments[2]) && ctype_digit($segments[2]) ? (int) $segments[2] : null;
+$id3 = isset($segments[3]) && ctype_digit($segments[3]) ? (int) $segments[3] : null;
 $seg2 = $segments[2] ?? null;
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -185,6 +222,54 @@ try {
         }
     }
 
+    // ---------------- /employee ----------------------------------------------------------
+    // [user] endpoints — employee self-service; API keys are rejected. Ownership
+    // is derived from the authenticated user's employee record, never from input.
+    if ($res === 'employee' && ($segments[1] ?? '') === 'goals') {
+        switch (true) {
+            case $method === 'GET' && count($segments) === 2:
+                GoalsController::index();
+            case in_array($method, ['PUT', 'PATCH'], true) && $id2 !== null && count($segments) === 3:
+                GoalsController::update($id2, $method === 'PATCH');
+            default:
+                Response::error('Method not allowed for this endpoint.', [], 405);
+        }
+    }
+
+    // ---------------- /employee/performance ---------------------------------------
+    // [user] endpoints — employee self-service; API keys are rejected. Ownership
+    // comes from the authenticated user's employee record, never from input.
+    if ($res === 'employee' && ($segments[1] ?? '') === 'performance') {
+        switch (true) {
+            case $method === 'GET' && count($segments) === 2:
+                PerformanceController::index();
+            case $method === 'GET' && $id2 !== null && count($segments) === 3:
+                PerformanceController::show($id2);
+            case $method === 'PATCH' && $id2 !== null && ($segments[3] ?? '') === 'self-assessment' && count($segments) === 4:
+                PerformanceController::saveSelfAssessmentDraft($id2);
+            case $method === 'POST' && $id2 !== null && ($segments[3] ?? '') === 'self-assessment' && count($segments) === 4:
+                PerformanceController::submitSelfAssessment($id2);
+            case $method === 'POST' && $id2 !== null && ($segments[3] ?? '') === 'acknowledge' && count($segments) === 4:
+                PerformanceController::acknowledge($id2);
+            default:
+                Response::error('Method not allowed for this endpoint.', [], 405);
+        }
+    }
+
+    // ---------------- /employee/competencies ---------------------------------
+    // [user] endpoints — employee self-service; API keys are rejected. Ownership
+    // comes from the authenticated user's employee record, never from input.
+    if ($res === 'employee' && ($segments[1] ?? '') === 'competencies') {
+        switch (true) {
+            case $method === 'GET' && count($segments) === 2:
+                CompetenciesController::index();
+            case $method === 'GET' && $id2 !== null && count($segments) === 3:
+                CompetenciesController::show($id2);
+            default:
+                Response::error('Method not allowed for this endpoint.', [], 405);
+        }
+    }
+
     // ---------------- /admin -------------------------------------------------------------
     // [user] endpoints — admin operations require Bearer/session auth.
     if ($res === 'admin') {
@@ -198,6 +283,48 @@ try {
                     AdminController::applicationStatus($id2);
                 }
                 AdminController::setApplicationStatus($id2);
+            // --- admin/performance (Phase 2) ---
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'periods' && count($segments) === 3 && $method === 'GET':
+                PerformanceController::periods();
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'periods' && count($segments) === 3 && $method === 'POST':
+                PerformanceController::createPeriod();
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'options' && count($segments) === 3 && $method === 'GET':
+                PerformanceController::options();
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && count($segments) === 3 && $method === 'GET':
+                PerformanceController::adminIndex();
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && count($segments) === 3 && $method === 'POST':
+                PerformanceController::store();
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && $id3 !== null && count($segments) === 4 && $method === 'GET':
+                PerformanceController::adminShow($id3);
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && $id3 !== null && count($segments) === 4 && in_array($method, ['PUT', 'PATCH'], true):
+                PerformanceController::adminUpdate($id3);
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && $id3 !== null && ($segments[4] ?? '') === 'goal-results' && count($segments) === 5 && $method === 'PUT':
+                PerformanceController::scoreGoals($id3);
+            case ($segments[1] ?? '') === 'performance' && ($segments[2] ?? '') === 'reviews' && $id3 !== null && ($segments[4] ?? '') === 'manager-feedback' && count($segments) === 5 && $method === 'PUT':
+                PerformanceController::managerFeedback($id3);
+            // --- admin/competencies (Phase 3A) ---
+            // Competency catalog (hr/manager read; hr-only write)
+            case ($segments[1] ?? '') === 'competencies' && count($segments) === 2 && $method === 'GET':
+                CompetenciesController::catalogIndex();
+            case ($segments[1] ?? '') === 'competencies' && count($segments) === 2 && $method === 'POST':
+                CompetenciesController::catalogStore();
+            case ($segments[1] ?? '') === 'competencies' && $id2 !== null && count($segments) === 3 && $method === 'GET':
+                CompetenciesController::catalogShow($id2);
+            case ($segments[1] ?? '') === 'competencies' && $id2 !== null && count($segments) === 3 && in_array($method, ['PUT', 'PATCH'], true):
+                CompetenciesController::catalogUpdate($id2, $method === 'PATCH');
+            case ($segments[1] ?? '') === 'competencies' && $id2 !== null && count($segments) === 3 && $method === 'DELETE':
+                CompetenciesController::catalogDestroy($id2);
+            // Employee competency assignments (hr/manager, manager scope enforced)
+            case ($segments[1] ?? '') === 'competencies' && ($segments[2] ?? '') === 'employees' && count($segments) === 3 && $method === 'GET':
+                CompetenciesController::assignmentsIndex();
+            case ($segments[1] ?? '') === 'competencies' && ($segments[2] ?? '') === 'employees' && count($segments) === 3 && $method === 'POST':
+                CompetenciesController::assignmentsStore();
+            case ($segments[1] ?? '') === 'competencies' && ($segments[2] ?? '') === 'employees' && $id3 !== null && count($segments) === 4 && $method === 'GET':
+                CompetenciesController::assignmentsShow($id3);
+            case ($segments[1] ?? '') === 'competencies' && ($segments[2] ?? '') === 'employees' && $id3 !== null && count($segments) === 4 && in_array($method, ['PUT', 'PATCH'], true):
+                CompetenciesController::assignmentsUpdate($id3, $method === 'PATCH');
+            case ($segments[1] ?? '') === 'competencies' && ($segments[2] ?? '') === 'employees' && $id3 !== null && count($segments) === 4 && $method === 'DELETE':
+                CompetenciesController::assignmentsDestroy($id3);
             default:
                 Response::notFound('Endpoint not found.');
         }

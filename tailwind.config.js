@@ -8,6 +8,7 @@ module.exports = {
         "./public/**/*.php",
         "./api/**/*.php",
         "./assets/**/*.js",
+        "./react/**/*.{js,jsx,ts,tsx}",
     ],
     // Preflight is DISABLED so Tailwind's global reset cannot alter the
     // existing HR1 design (body, headings, buttons, forms, tables, etc).
