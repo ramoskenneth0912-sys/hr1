@@ -37,6 +37,10 @@
  *
  *   GET    employee/goals                  → GoalsController::index   (employee, own goals)
  *   PATCH  employee/goals/{id}             → GoalsController::update  (employee, own goal)
+ *   GET    admin/goals                     → GoalsController::adminIndex (hr/manager, scoped)
+ *   GET    admin/goals/{id}                → GoalsController::adminShow
+ *   POST   admin/goals                     → GoalsController::adminStore
+ *   PUT/PATCH admin/goals/{id}             → GoalsController::adminUpdate
  *
  *   GET    employee/competencies                  → CompetenciesController::index   (employee, own competencies)
  *   GET    employee/competencies/{id}             → CompetenciesController::show    (employee, own competency)
@@ -314,6 +318,22 @@ try {
     // [user] endpoints — admin operations require Bearer/session auth.
     if ($res === 'admin') {
         switch (true) {
+            case $method === 'GET' && ($segments[1] ?? '') === 'goals' && count($segments) === 2:
+                GoalsController::adminIndex();
+            case $method === 'GET' && ($segments[1] ?? '') === 'goals'
+                && $id2 !== null && count($segments) === 3:
+                GoalsController::adminShow($id2);
+            case $method === 'POST' && ($segments[1] ?? '') === 'goals' && count($segments) === 2:
+                GoalsController::adminStore();
+            case in_array($method, ['PUT', 'PATCH'], true)
+                && ($segments[1] ?? '') === 'goals'
+                && $id2 !== null && count($segments) === 3:
+                GoalsController::adminUpdate($id2);
+            case $method === 'GET' && ($segments[1] ?? '') === 'recognition' && count($segments) === 2:
+                RecognitionController::adminIndex();
+            case $method === 'GET' && ($segments[1] ?? '') === 'recognition'
+                && $id2 !== null && count($segments) === 3:
+                RecognitionController::adminShow($id2);
             case $method === 'POST' && ($segments[1] ?? '') === 'recognition' && count($segments) === 2:
                 RecognitionController::store();
             case in_array($method, ['PUT', 'PATCH'], true)
