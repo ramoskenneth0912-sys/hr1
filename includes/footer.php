@@ -24,6 +24,54 @@
     });
 })();
 (function () {
+    var key = 'hr1_ess_navigation_scroll';
+    var navigation = document.querySelector('.sidebar-nav');
+    if (!navigation) return;
+
+    function locationKey(url) {
+        var target = new URL(url, window.location.href);
+        return target.pathname + target.search + target.hash;
+    }
+
+    navigation.addEventListener('click', function (event) {
+        var link = event.target.closest('.nav-link');
+        if (!link || link.target === '_blank' || event.defaultPrevented) return;
+
+        try {
+            sessionStorage.setItem(key, JSON.stringify({
+                location: locationKey(link.href),
+                top: window.scrollY
+            }));
+        } catch (err) {
+            /* Scroll preservation is optional when session storage is unavailable. */
+        }
+    });
+
+    function restoreScroll() {
+        var saved;
+        try {
+            saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+            if (!saved || saved.location !== locationKey(window.location.href)) return;
+            sessionStorage.removeItem(key);
+        } catch (err) {
+            return;
+        }
+
+        var attempts = 0;
+        function apply() {
+            window.scrollTo(0, saved.top);
+            attempts += 1;
+            if (attempts < 10 && document.documentElement.scrollHeight < saved.top + window.innerHeight) {
+                window.requestAnimationFrame(apply);
+            }
+        }
+        window.requestAnimationFrame(apply);
+    }
+
+    window.addEventListener('pageshow', restoreScroll);
+    restoreScroll();
+})();
+(function () {
     var layout = document.querySelector('.app-layout');
     var toggle = document.getElementById('sidebarToggle');
     var sidebar = document.getElementById('appSidebar');

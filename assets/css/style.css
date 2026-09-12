@@ -216,6 +216,29 @@ a:hover { color: var(--purple-dark); }
     transition: background .15s, color .15s;
 }
 
+.nav-parent {
+    width: calc(100% - 1.5rem);
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: transparent;
+    border: 0;
+    color: var(--sidebar-text);
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+}
+
+.nav-chevron {
+    margin-left: auto;
+    font-size: .8rem;
+    line-height: 1;
+    transition: transform .15s ease;
+}
+
+.nav-parent[aria-expanded="true"] .nav-chevron {
+    transform: rotate(90deg);
+}
+
 .nav-link:hover {
     background: var(--sidebar-hover);
     color: var(--sidebar-text-active);
@@ -226,6 +249,15 @@ a:hover { color: var(--purple-dark); }
     background: var(--sidebar-active);
     color: var(--sidebar-text-active);
     box-shadow: inset 3px 0 0 var(--purple-light);
+}
+
+.nav-children {
+    margin: -.1rem 0 .35rem;
+}
+
+.nav-link-child {
+    padding-left: 2.25rem;
+    font-size: .82rem;
 }
 
 .nav-icon {

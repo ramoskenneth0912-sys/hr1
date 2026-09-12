@@ -27,7 +27,7 @@ export default function MyLearning() {
     <div className="space-y-6">
       <PageHeader
         title="My Learning"
-        subtitle="A place for your future learning and development resources"
+        subtitle="Learning resources and activities will appear here when available"
       />
 
       <section className="rounded-2xl border border-violet-100 bg-violet-50/70 p-6">
@@ -37,12 +37,11 @@ export default function MyLearning() {
           </div>
           <div>
             <h2 className="text-base font-semibold text-violet-950">
-              Learning resources are being prepared
+              No learning resources are currently available
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-violet-800">
-              This page is ready for the future learning and courseware owner
-              to connect approved resources. No course enrollment, playback, or
-              assessment is managed here yet.
+              Approved learning resources will appear here when a supported
+              learning source becomes available.
             </p>
           </div>
         </div>
@@ -54,8 +53,8 @@ export default function MyLearning() {
           through HR1.
         </FoundationCard>
         <FoundationCard icon={Clock} title="In the meantime">
-          Use My Trainings for current assignment and progress information,
-          while this page remains a clear home for future learning resources.
+          Use My Trainings for formal training assignments. This page remains
+          a clear home for future learning resources.
         </FoundationCard>
       </div>
     </div>

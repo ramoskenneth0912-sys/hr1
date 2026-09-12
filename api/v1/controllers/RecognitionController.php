@@ -130,12 +130,52 @@ class RecognitionController
 
     private static function selectBase(): string
     {
-        return 'SELECT r.*, u.username AS issuer_username,
+        return 'SELECT r.*, re.employee_no AS recipient_employee_no,
+                       re.first_name AS recipient_first_name,
+                       re.last_name AS recipient_last_name,
+                       u.username AS issuer_username,
                        e.first_name AS issuer_first_name,
                        e.last_name AS issuer_last_name
                 FROM employee_recognitions r
+                INNER JOIN employees re ON re.id = r.recipient_employee_id
                 INNER JOIN users u ON u.id = r.issuer_user_id
                 LEFT JOIN employees e ON e.id = u.employee_id';
+    }
+
+    private static function adminWhere(array $context, ?string $status, ?int $recipientId): array
+    {
+        $where = [];
+        $params = [];
+        if ($context['role'] === 'manager') {
+            $where[] = 're.manager_id = :manager_id';
+            $params[':manager_id'] = $context['employee_id'];
+        }
+        if ($status !== null) {
+            if (!in_array($status, self::STATUSES, true)) {
+                Response::validation(['status' => 'Invalid recognition status.']);
+            }
+            $where[] = 'r.status = :status';
+            $params[':status'] = $status;
+        }
+        if ($recipientId !== null) {
+            if ($recipientId <= 0) {
+                Response::validation(['recipient_employee_id' => 'Recipient employee ID must be positive.']);
+            }
+            $where[] = 'r.recipient_employee_id = :recipient_id';
+            $params[':recipient_id'] = $recipientId;
+        }
+        return [$where, $params];
+    }
+
+    private static function adminShape(array $row): array
+    {
+        $item = self::shape($row);
+        $item['recipient_employee_id'] = (int) $row['recipient_employee_id'];
+        $item['recipient_employee_no'] = $row['recipient_employee_no'];
+        $item['recipient_name'] = trim($row['recipient_first_name'] . ' ' . $row['recipient_last_name']);
+        $item['created_at'] = $row['created_at'];
+        $item['updated_at'] = $row['updated_at'];
+        return $item;
     }
 
     public static function index(): never
@@ -150,6 +190,54 @@ class RecognitionController
         $stmt->execute([':employee_id' => $context['employee_id']]);
         $items = array_map([self::class, 'shape'], $stmt->fetchAll());
         Response::list($items, 'Recognition records retrieved successfully.', 1, count($items), count($items));
+    }
+
+    public static function adminIndex(): never
+    {
+        $context = self::adminContext();
+        $page = max(1, (int) (api_query('page') ?? 1));
+        $limit = min(100, max(1, (int) (api_query('limit') ?? 25)));
+        $status = api_query('status');
+        $recipientId = api_query('recipient_employee_id');
+        $recipientId = $recipientId === null || $recipientId === '' ? null : filter_var($recipientId, FILTER_VALIDATE_INT);
+        if ($recipientId === false) {
+            Response::validation(['recipient_employee_id' => 'Recipient employee ID must be an integer.']);
+        }
+
+        [$where, $params] = self::adminWhere($context, $status === null ? null : (string) $status, $recipientId);
+        $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+        $count = db()->prepare('SELECT COUNT(*) FROM employee_recognitions r INNER JOIN employees re ON re.id = r.recipient_employee_id' . $whereSql);
+        $count->execute($params);
+        $total = (int) $count->fetchColumn();
+
+        $offset = ($page - 1) * $limit;
+        $stmt = db()->prepare(
+            self::selectBase() . $whereSql
+            . ' ORDER BY r.recognition_date DESC, r.id DESC LIMIT :limit OFFSET :offset'
+        );
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $items = array_map([self::class, 'adminShape'], $stmt->fetchAll());
+        Response::list($items, 'Recognition records retrieved successfully.', $page, $limit, $total);
+    }
+
+    public static function adminShow(int $id): never
+    {
+        $context = self::adminContext();
+        $stmt = db()->prepare(self::selectBase() . ' WHERE r.id = :id LIMIT 1');
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            Response::notFound('Recognition record not found.');
+        }
+        if ($context['role'] === 'manager') {
+            self::assertEmployeeScope((int) $row['recipient_employee_id'], $context);
+        }
+        Response::item(self::adminShape($row), 'Recognition record retrieved successfully.');
     }
 
     public static function store(): never
