@@ -264,7 +264,7 @@ if (!empty($_SESSION['flash'])) {
             padding: .42rem .9rem;
             border-radius: 999px;
             background: var(--purple-bg);
-            color: var(--purple);
+            color: var(--text-dark);
             font-size: .73rem;
             font-weight: 600;
             letter-spacing: .02em;
@@ -323,7 +323,7 @@ if (!empty($_SESSION['flash'])) {
             cursor: pointer;
             transition: color .15s ease, background .15s ease;
         }
-        .pw-toggle:hover { color: var(--purple); background: var(--purple-bg); }
+        .pw-toggle:hover { color: var(--text-dark); background: var(--purple-bg); }
         .pw-toggle svg { width: 16px; height: 16px; }
         .pw-toggle .icon-eye-off { display: none; }
         .pw-toggle.active .icon-eye { display: none; }
@@ -355,9 +355,9 @@ if (!empty($_SESSION['flash'])) {
         .login-forgot {
             font-size: .78rem;
             font-weight: 600;
-            color: var(--purple);
+            color: var(--text-dark);
         }
-        .login-forgot:hover { color: var(--purple-dark); }
+        .login-forgot:hover { color: var(--text-dark); }
         .login-inner .btn-primary {
             width: 100%;
             padding: .78rem;
@@ -396,7 +396,7 @@ if (!empty($_SESSION['flash'])) {
             font-weight: 500;
             color: var(--muted);
         }
-        .login-back:hover { color: var(--purple); }
+        .login-back:hover { color: var(--text-dark); }
 
         /* ---------- RESPONSIVE ---------- */
         @media (max-width: 980px) {

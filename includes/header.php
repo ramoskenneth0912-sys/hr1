@@ -7,6 +7,14 @@ $pageTitle = $pageTitle ?? APP_NAME;
 $currentModule = $currentModule ?? '';
 $bodyClass = $bodyClass ?? '';
 
+// Some module pages report the Core HCM parent id ('hcm') even when the page
+// is actually a child entry (Employee Management + its sub-pages). Map those
+// contexts to the child id so the active indicator lands on the current page
+// and never on the expandable parent.
+$currentModuleAliases = [
+    'hcm' => 'employee-management',
+];
+
 $currentUser = getCurrentUser();
 $userRole = getUserRole();
 
@@ -40,8 +48,14 @@ if (isHRorManager()) {
         ['id' => 'recruitment', 'label' => 'Recruitment', 'url' => BASE_URL . '/modules/recruitment/index.php', 'icon' => 'briefcase'],
         ['id' => 'applicants', 'label' => 'Applicants', 'url' => BASE_URL . '/modules/applicants/index.php', 'icon' => 'users'],
         ['id' => 'onboarding', 'label' => 'Onboarding', 'url' => BASE_URL . '/modules/onboarding/index.php', 'icon' => 'checklist'],
-        ['id' => 'hcm', 'label' => 'Core HCM', 'url' => BASE_URL . '/modules/hcm/index.php', 'icon' => 'building'],
-        ['id' => 'records', 'label' => 'Records', 'url' => BASE_URL . '/modules/records/index.php', 'icon' => 'folder'],
+        ['id' => 'hcm', 'label' => 'Core HCM', 'url' => BASE_URL . '/modules/hcm/index.php', 'icon' => 'building', 'children' => [
+            ['id' => 'employee-management', 'label' => 'Employee Management', 'url' => BASE_URL . '/modules/hcm/index.php', 'icon' => 'building'],
+            ['id' => 'goals', 'label' => 'Goals', 'url' => BASE_URL . '/modules/hcm/goals.php', 'icon' => 'target'],
+            ['id' => 'performance', 'label' => 'Performance', 'url' => BASE_URL . '/modules/hcm/performance.php', 'icon' => 'activity'],
+            ['id' => 'competencies', 'label' => 'Competencies', 'url' => BASE_URL . '/modules/hcm/competencies.php', 'icon' => 'layers'],
+            ['id' => 'records', 'label' => 'Records', 'url' => BASE_URL . '/modules/records/index.php', 'icon' => 'folder'],
+            ['id' => 'recognition', 'label' => 'Recognition', 'url' => BASE_URL . '/modules/hcm/recognition.php', 'icon' => 'award'],
+        ]],
     ];
     $navSections['SYSTEM'] = [
         ['id' => 'users', 'label' => 'User Management', 'url' => BASE_URL . '/modules/users/index.php', 'icon' => 'users'],
@@ -60,11 +74,17 @@ if (isHRorManager()) {
         ['id' => 'leave-requests', 'label' => 'Leave Requests', 'url' => BASE_URL . '/modules/employee/leave.php', 'icon' => 'checklist'],
         ['id' => 'my-salary', 'label' => 'My Salary', 'url' => BASE_URL . '/modules/employee/salary.php', 'icon' => 'briefcase'],
     ];
+    $navSections['MY CAREER'] = [
+        ['id' => 'my-goals', 'label' => 'My Goals', 'url' => BASE_URL . '/modules/employee/goals.php', 'icon' => 'target'],
+        ['id' => 'my-performance', 'label' => 'My Performance', 'url' => BASE_URL . '/modules/employee/performance.php', 'icon' => 'activity'],
+        ['id' => 'my-competencies', 'label' => 'My Competencies', 'url' => BASE_URL . '/modules/employee/competencies.php', 'icon' => 'layers'],
+        ['id' => 'my-trainings', 'label' => 'My Trainings', 'url' => BASE_URL . '/modules/employee/trainings.php', 'icon' => 'book'],
+        ['id' => 'my-learning', 'label' => 'My Learning', 'url' => BASE_URL . '/modules/employee/learning.php', 'icon' => 'graduation-cap'],
+        ['id' => 'my-development', 'label' => 'My Development', 'url' => BASE_URL . '/modules/employee/development.php', 'icon' => 'rocket'],
+        ['id' => 'my-recognition', 'label' => 'My Recognition', 'url' => BASE_URL . '/modules/employee/recognition.php', 'icon' => 'award'],
+    ];
     $navSections['COMMUNICATION'] = [
         ['id' => 'notifications', 'label' => 'Notifications', 'url' => BASE_URL . '/modules/employee/notifications.php', 'icon' => 'bell'],
-    ];
-    $navSections['SYSTEM'] = [
-        ['id' => 'settings', 'label' => 'Settings', 'url' => BASE_URL . '/modules/employee/settings.php', 'icon' => 'settings'],
     ];
 } elseif (isApplicant()) {
     $navSections['MAIN'] = [
@@ -94,7 +114,7 @@ $notifItems = $notifData['items'];
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=5">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=14">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/tailwind.css">
 </head>
 <body class="<?= e($bodyClass) ?>">
@@ -124,14 +144,53 @@ require __DIR__ . '/maintenance_banner.php';
             <div class="nav-section">
                 <span class="nav-section-label"><?= e($section) ?></span>
                 <?php foreach ($items as $item): ?>
+                <?php $activeChildId = $currentModuleAliases[$currentModule] ?? $currentModule; ?>
+                <?php $hasActiveChild = !empty($item['children']) && in_array($activeChildId, array_column($item['children'], 'id'), true); ?>
+                <?php if (!empty($item['children'])): ?>
+                <button type="button" class="nav-link nav-parent" data-tooltip="<?= e($item['label']) ?>" aria-expanded="<?= $hasActiveChild ? 'true' : 'false' ?>" aria-controls="nav-children-<?= e($item['id']) ?>">
+                    <span class="nav-icon nav-icon-<?= e($item['icon']) ?>"></span>
+                    <span><?= e($item['label']) ?></span>
+                    <span class="nav-chevron" aria-hidden="true">▸</span>
+                </button>
+                <?php else: ?>
                 <a href="<?= e($item['url']) ?>" class="nav-link <?= $currentModule === $item['id'] ? 'active' : '' ?>" data-tooltip="<?= e($item['label']) ?>">
                     <span class="nav-icon nav-icon-<?= e($item['icon']) ?>"></span>
                     <span><?= e($item['label']) ?></span>
                 </a>
+                <?php endif; ?>
+                <?php if (!empty($item['children'])): ?>
+                <div class="nav-children" id="nav-children-<?= e($item['id']) ?>"<?= $hasActiveChild ? '' : ' hidden' ?>>
+                    <?php foreach ($item['children'] as $child): ?>
+                    <a href="<?= e($child['url']) ?>" class="nav-link nav-link-child <?= $activeChildId === $child['id'] ? 'active' : '' ?>" data-tooltip="<?= e($child['label']) ?>">
+                        <span class="nav-icon nav-icon-<?= e($child['icon']) ?>"></span>
+                        <span><?= e($child['label']) ?></span>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
                 <?php endforeach; ?>
             </div>
             <?php endforeach; ?>
         </nav>
+        <script>
+        (function () {
+            var parents = document.querySelectorAll('.nav-parent');
+            if (!parents.length) return;
+
+            parents.forEach(function (parent) {
+                var targetId = parent.getAttribute('aria-controls');
+                var children = targetId ? document.getElementById(targetId) : null;
+                if (!children) return;
+
+                parent.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    var expanded = parent.getAttribute('aria-expanded') === 'true';
+                    parent.setAttribute('aria-expanded', String(!expanded));
+                    children.hidden = expanded;
+                });
+            });
+        })();
+        </script>
 
         <div class="sidebar-footer">
             <span class="sidebar-version"><?= isHRorManager() ? 'HR Admin' : (isEmployee() ? 'Employee' : 'Applicant') ?> · Core HR v1.0</span>

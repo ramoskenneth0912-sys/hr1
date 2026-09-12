@@ -282,17 +282,17 @@ $filterQuery = http_build_query($qs);
 
 <section class="panel fade-in-up" style="animation-delay:.05s">
     <!-- Status filter tabs -->
-    <div class="apps-tabs" role="tablist" aria-label="Filter applicants by stage">
+    <div class="tab-bar" role="tablist" aria-label="Filter applicants by stage">
         <?php foreach ($tabs as $key => $def): ?>
         <?php
             $href = 'index.php?tab=' . urlencode($key);
             if ($filterQuery !== '') $href .= '&' . $filterQuery;
             $active = $tab === $key ? ' active' : '';
         ?>
-        <a href="<?= e($href) ?>" class="apps-tab<?= $active ?>" role="tab" aria-selected="<?= $tab === $key ? 'true' : 'false' ?>">
+        <a href="<?= e($href) ?>" class="tab-link<?= $active ?>" role="tab" aria-selected="<?= $tab === $key ? 'true' : 'false' ?>">
             <?= e($def['label']) ?>
             <?php if (isset($tabCounts[$key]) && $tabCounts[$key] > 0): ?>
-            <span class="apps-tab-count"><?= (int) $tabCounts[$key] ?></span>
+            <span class="tab-count"><?= (int) $tabCounts[$key] ?></span>
             <?php endif; ?>
         </a>
         <?php endforeach; ?>
@@ -589,22 +589,6 @@ $filterQuery = http_build_query($qs);
 </div>
 
 <style>
-.apps-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1.25rem; }
-.apps-tab {
-    display: inline-flex; align-items: center; gap: .4rem;
-    padding: .45rem .9rem; border: 1px solid var(--border); border-radius: 999px;
-    font-size: .8rem; font-weight: 600; color: var(--text); background: var(--surface);
-    transition: all .15s;
-}
-.apps-tab:hover { border-color: var(--purple-light); color: var(--purple); text-decoration: none; }
-.apps-tab.active { background: linear-gradient(135deg, var(--purple-dark), var(--purple)); color: #fff; border-color: transparent; box-shadow: 0 4px 14px rgba(123,44,191,.3); }
-.apps-tab-count {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 20px; height: 20px; padding: 0 .35rem; border-radius: 999px;
-    background: var(--purple-bg); color: var(--purple); font-size: .68rem; font-weight: 700;
-}
-.apps-tab.active .apps-tab-count { background: rgba(255,255,255,.25); color: #fff; }
-
 .apps-filters { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .apps-search {
     position: relative; display: flex; align-items: center; flex: 1 1 260px; min-width: 220px;
@@ -622,8 +606,16 @@ $filterQuery = http_build_query($qs);
     font-size: .85rem; font-family: inherit; color: var(--text); background: var(--surface);
 }
 
+/* Uniform toolbar: search and selects share one height, and the selects get
+   equal comfortable widths so the controls read as a single strip that lines
+   up with the table edges below. */
+.apps-search,
+.apps-select { height: 39px; }
+.apps-search input { padding: 0 .875rem 0 2.3rem; height: 100%; }
+.apps-filters .apps-select { width: 190px; }
+
 .applicant-name { font-weight: 600; color: var(--text-dark); }
-.applicant-name:hover { color: var(--purple); }
+.applicant-name:hover { color: var(--text-dark); }
 .applicant-sub { font-size: .72rem; color: var(--muted); }
 
 /* Subtle "ready for final interview" indicator shown alongside a PASSED
@@ -665,7 +657,7 @@ $filterQuery = http_build_query($qs);
     display: block; width: 100%; text-align: left; padding: .55rem .75rem; border-radius: 8px;
     font-size: .82rem; font-weight: 500; color: var(--text);
 }
-.apps-menu-item:hover { background: var(--purple-bg); color: var(--purple); text-decoration: none; }
+.apps-menu-item:hover { background: var(--purple-bg); color: var(--text-dark); text-decoration: none; }
 .apps-menu-form { margin: 0; }
 .apps-menu-btn { border: 0; background: none; cursor: pointer; font-family: inherit; }
 .apps-menu-divider { height: 1px; background: var(--border); margin: .35rem .25rem; }
@@ -677,10 +669,9 @@ $filterQuery = http_build_query($qs);
 .apps-table { min-width: 780px; }
 
 @media (max-width: 640px) {
-    .apps-tabs { gap: .3rem; }
     .apps-filters { flex-direction: column; align-items: stretch; }
     .apps-search { flex: 1 1 auto; }
-    .apps-select { width: 100%; }
+    .apps-filters .apps-select { width: 100%; }
 }
 </style>
 

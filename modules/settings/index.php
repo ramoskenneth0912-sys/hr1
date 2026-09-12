@@ -3,9 +3,6 @@
  * HR/ADMIN SETTINGS — administrative configuration area.
  * Sections: Account, Security, Notifications, Users & Roles,
  * HR Preferences, Recruitment, System (admin-only).
- *
- * Employee self-service settings intentionally live ONLY in
- * modules/employee/settings.php — employees are redirected there.
  */
 require_once __DIR__ . '/../../includes/auth.php';
 requireLogin();
@@ -13,8 +10,8 @@ requireNotApplicant();
 require_once __DIR__ . '/../../includes/security_log.php';
 
 if (isEmployee()) {
-    flash('info', 'Employee settings live in your own portal.');
-    redirect(BASE_URL . '/modules/employee/settings.php');
+    flash('info', 'Employee settings are managed from your profile.');
+    redirect(BASE_URL . '/modules/employee/profile.php');
 }
 
 $user = getCurrentUser();
@@ -535,7 +532,7 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
         .mmx-chip{ display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; }
         .mmx-chip span{ border:1px solid var(--border,#E9EDF7); border-radius:999px; padding:.35rem .8rem; font-size:.78rem; background:var(--surface,#fff); transition:border-color .15s ease, box-shadow .15s ease; }
         .mmx-chip input{ position:absolute; opacity:0; pointer-events:none; }
-        .mmx-chip input:checked + span{ border-color:var(--purple,#7B2CBF); box-shadow:0 0 0 2px rgba(123,44,191,.18); color:var(--purple,#7B2CBF); font-weight:600; }
+        .mmx-chip input:checked + span{ border-color:var(--purple,#7B2CBF); box-shadow:0 0 0 2px rgba(123,44,191,.18); color:var(--text,#344054); font-weight:600; }
     </style>
     <script>
     (function () {

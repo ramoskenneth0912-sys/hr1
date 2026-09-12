@@ -199,7 +199,7 @@ function recordDocRow(array $r): array
         .result-list { margin: 0; padding-left: 1.4rem; list-style: none; font-size: .875rem; color: var(--text); }
         .result-list li { margin-bottom: .3rem; }
         .result-num { color: var(--muted); margin-right: .4rem; font-variant-numeric: tabular-nums; }
-        .result-list a { color: var(--purple); text-decoration: none; }
+        .result-list a { color: var(--text-dark); text-decoration: none; }
         .result-list a:hover { text-decoration: underline; }
     </style>
     <form method="get" class="inline-form">

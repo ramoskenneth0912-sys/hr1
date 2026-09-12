@@ -116,7 +116,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 <section class="panel fade-in-up" style="animation-delay:.15s">
     <div class="table-wrap">
-    <table class="data-table" style="min-width:1000px">
+    <table class="data-table exam-history-table">
         <thead>
             <tr>
                 <th>Applicant No.</th>
@@ -202,5 +202,46 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="alert alert-info" style="margin-top:1rem;">
 
 </div>
+
+<style>
+.exam-history-table th:first-child,
+.exam-history-table td:first-child {
+    position: sticky;
+    left: 0;
+    min-width: 9.375rem;
+}
+.exam-history-table th:first-child {
+    z-index: 2;
+    background: var(--bg);
+    box-shadow: 1px 0 0 0 var(--border);
+}
+.exam-history-table td:first-child {
+    z-index: 1;
+    background: var(--surface);
+    box-shadow: 1px 0 0 0 var(--border);
+}
+
+/* Deliberate, balanced column widths (auto layout can otherwise give each
+   column an arbitrary width). Wide enough to read, tight enough to keep the
+   initial viewport showing as much of the grid as possible. */
+.exam-history-table th:nth-child(2),  .exam-history-table td:nth-child(2)  { min-width: 12.75rem; }
+.exam-history-table th:nth-child(3),  .exam-history-table td:nth-child(3)  { min-width: 9.375rem; }
+.exam-history-table th:nth-child(4),  .exam-history-table td:nth-child(4)  { min-width: 6.5rem;   }
+.exam-history-table th:nth-child(5),  .exam-history-table td:nth-child(5)  { min-width: 6.875rem; }
+.exam-history-table th:nth-child(6),  .exam-history-table td:nth-child(6)  { min-width: 5.75rem;  }
+.exam-history-table th:nth-child(7),  .exam-history-table td:nth-child(7)  { min-width: 6.875rem; }
+.exam-history-table th:nth-child(8),  .exam-history-table td:nth-child(8)  { min-width: 6.5rem;   }
+.exam-history-table th:nth-child(9),  .exam-history-table td:nth-child(9)  { min-width: 12.875rem; }
+.exam-history-table th:nth-child(10), .exam-history-table td:nth-child(10) { min-width: 15rem;   }
+
+/* Exam date, score and percentage read as a tidy numeric block when aligned
+   right against the column edge (headers included). */
+.exam-history-table th:nth-child(5),
+.exam-history-table th:nth-child(6),
+.exam-history-table th:nth-child(7),
+.exam-history-table td:nth-child(5),
+.exam-history-table td:nth-child(6),
+.exam-history-table td:nth-child(7) { text-align: right; }
+</style>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

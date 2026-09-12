@@ -2,6 +2,7 @@
     </div>
 </div>
 <?php if (!empty($reactEntry)): ?>
+<?php require_once __DIR__ . '/react.php'; ?>
 <?= react_asset_tags((string) $reactEntry) ?>
 <?php endif; ?>
 <script>
@@ -21,6 +22,58 @@
             toggle.setAttribute('aria-expanded', 'false');
         }
     });
+})();
+(function () {
+    var key = 'hr1_sidebar_navigation_scroll';
+    var navigation = document.querySelector('.sidebar-nav');
+    if (!navigation) return;
+
+    var sidebar = navigation.closest('.sidebar');
+    if (!sidebar) return;
+
+    function locationKey(url) {
+        var target = new URL(url, window.location.href);
+        return target.pathname + target.search + target.hash;
+    }
+
+    navigation.addEventListener('click', function (event) {
+        var link = event.target.closest('.nav-link');
+        if (!link || link.classList.contains('nav-parent') || link.target === '_blank' || event.defaultPrevented) return;
+
+        try {
+            sessionStorage.setItem(key, JSON.stringify({
+                location: locationKey(link.href),
+                top: sidebar.scrollTop
+            }));
+        } catch (err) {
+            /* Scroll preservation is optional when session storage is unavailable. */
+        }
+    });
+
+    function restoreScroll() {
+        var saved;
+        try {
+            saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+            if (!saved || saved.location !== locationKey(window.location.href)) return;
+            sessionStorage.removeItem(key);
+        } catch (err) {
+            return;
+        }
+
+        var attempts = 0;
+        function apply() {
+            var max = sidebar.scrollHeight - sidebar.clientHeight;
+            sidebar.scrollTop = Math.min(saved.top, max);
+            attempts += 1;
+            if (attempts < 10 && sidebar.scrollHeight < saved.top + sidebar.clientHeight) {
+                window.requestAnimationFrame(apply);
+            }
+        }
+        window.requestAnimationFrame(apply);
+    }
+
+    window.addEventListener('pageshow', restoreScroll);
+    restoreScroll();
 })();
 (function () {
     var layout = document.querySelector('.app-layout');

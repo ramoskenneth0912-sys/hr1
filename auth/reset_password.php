@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: block; text-align: center; margin-top: 1.1rem;
             font-size: .8rem; font-weight: 500; color: var(--muted); text-decoration: none;
         }
-        .login-back:hover { color: var(--purple); }
+        .login-back:hover { color: var(--text-dark); }
         .success-msg {
             background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
             border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem;
@@ -187,14 +187,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="success-msg">
                     Your password has been reset. You can now sign in with your new password.
                 </div>
-                <a href="<?= BASE_URL ?>/auth/login.php" class="login-back" style="margin-top:1rem;font-weight:600;color:var(--purple)">&larr; Sign In</a>
+                <a href="<?= BASE_URL ?>/auth/login.php" class="login-back" style="margin-top:1rem;font-weight:600;color:var(--text-dark)">&larr; Sign In</a>
 
             <?php elseif (!$tokenValid && $_SERVER['REQUEST_METHOD'] !== 'POST'): ?>
                 <h2>Invalid or expired link</h2>
                 <div class="expired-msg">
                     This password reset link is invalid or has expired. Please request a new one.
                 </div>
-                <a href="<?= BASE_URL ?>/auth/forgot_password.php" class="login-back" style="margin-top:1rem;font-weight:600;color:var(--purple)">Request a new reset link &rarr;</a>
+                <a href="<?= BASE_URL ?>/auth/forgot_password.php" class="login-back" style="margin-top:1rem;font-weight:600;color:var(--text-dark)">Request a new reset link &rarr;</a>
 
             <?php else: ?>
                 <h2>Set new password</h2>

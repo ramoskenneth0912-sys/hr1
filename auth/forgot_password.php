@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: .8rem; font-weight: 500; color: var(--muted);
             text-decoration: none;
         }
-        .login-back:hover { color: var(--purple); }
+        .login-back:hover { color: var(--text-dark); }
         .success-msg {
             background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
             border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem;

@@ -108,16 +108,12 @@ function e_preset(?string $v): string { return htmlspecialchars($v ?? '', ENT_QU
         .btn-reject:hover { background: #dc2626; }
         .btn-disabled { opacity: .5; pointer-events: none; }
         .empty-msg { text-align: center; padding: 2rem; color: var(--muted); font-size: .9rem; }
-        .tab-bar { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid #e5e7eb; }
-        .tab-bar a { padding: .6rem 1.2rem; font-size: .85rem; font-weight: 600; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
-        .tab-bar a.active { color: var(--purple); border-bottom-color: var(--purple); }
-        .tab-bar a:hover { color: var(--purple-dark); }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
 <div class="main-content" style="padding: 2rem; max-width: 960px; margin: 0 auto;">
-    <a href="<?= BASE_URL ?>/modules/settings/index.php" style="display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; font-weight:600; color:var(--purple); text-decoration:none; margin-bottom:1rem; transition:color .15s;">
+    <a href="<?= BASE_URL ?>/modules/settings/index.php" style="display:inline-flex; align-items:center; gap:.35rem; font-size:.85rem; font-weight:600; color:var(--text-dark); text-decoration:none; margin-bottom:1rem; transition:color .15s;">
         <span aria-hidden="true">&larr;</span> Back to Settings
     </a>
     <div class="page-header">
@@ -130,8 +126,8 @@ function e_preset(?string $v): string { return htmlspecialchars($v ?? '', ENT_QU
     <?php endif; ?>
 
     <div class="tab-bar">
-        <a href="#pending" class="active">Pending (<?= count($pendingRequests) ?>)</a>
-        <a href="#history">History</a>
+        <a href="#pending" class="tab-link active">Pending (<?= count($pendingRequests) ?>)</a>
+        <a href="#history" class="tab-link">History</a>
     </div>
 
     <div id="pending">
