@@ -232,11 +232,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gap: .4rem;
             font-size: .875rem;
             font-weight: 600;
-            color: var(--purple);
+            color: var(--text-dark);
             text-decoration: none;
             margin-bottom: 1.5rem;
         }
-        .back-link:hover { color: var(--purple-dark); }
+        .back-link:hover { color: var(--text-dark); }
         .apply-title {
             font-size: 1.5rem;
             font-weight: 700;

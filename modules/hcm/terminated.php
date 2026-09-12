@@ -23,6 +23,7 @@ $employees = db()->query(
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
+    <div class="table-wrap">
     <table class="data-table">
         <thead>
             <tr>
@@ -57,6 +58,7 @@ $employees = db()->query(
             <?php endforeach; endif; ?>
         </tbody>
     </table>
+    </div>
 </section>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>

@@ -24,9 +24,12 @@
     });
 })();
 (function () {
-    var key = 'hr1_ess_navigation_scroll';
+    var key = 'hr1_sidebar_navigation_scroll';
     var navigation = document.querySelector('.sidebar-nav');
     if (!navigation) return;
+
+    var sidebar = navigation.closest('.sidebar');
+    if (!sidebar) return;
 
     function locationKey(url) {
         var target = new URL(url, window.location.href);
@@ -35,12 +38,12 @@
 
     navigation.addEventListener('click', function (event) {
         var link = event.target.closest('.nav-link');
-        if (!link || link.target === '_blank' || event.defaultPrevented) return;
+        if (!link || link.classList.contains('nav-parent') || link.target === '_blank' || event.defaultPrevented) return;
 
         try {
             sessionStorage.setItem(key, JSON.stringify({
                 location: locationKey(link.href),
-                top: window.scrollY
+                top: sidebar.scrollTop
             }));
         } catch (err) {
             /* Scroll preservation is optional when session storage is unavailable. */
@@ -59,9 +62,10 @@
 
         var attempts = 0;
         function apply() {
-            window.scrollTo(0, saved.top);
+            var max = sidebar.scrollHeight - sidebar.clientHeight;
+            sidebar.scrollTop = Math.min(saved.top, max);
             attempts += 1;
-            if (attempts < 10 && document.documentElement.scrollHeight < saved.top + window.innerHeight) {
+            if (attempts < 10 && sidebar.scrollHeight < saved.top + sidebar.clientHeight) {
                 window.requestAnimationFrame(apply);
             }
         }

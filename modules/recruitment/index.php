@@ -26,6 +26,7 @@ $jobs = db()->query(
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
     <h2 id="job-postings">Job Postings</h2>
+    <div class="table-wrap">
     <table class="data-table" id="jobsTable">
         <thead>
             <tr>
@@ -61,6 +62,7 @@ $jobs = db()->query(
             <?php endforeach; endif; ?>
         </tbody>
     </table>
+    </div>
 </section>
 
 <!-- Remove job posting confirmation dialog (keeps the action as POST + CSRF) -->

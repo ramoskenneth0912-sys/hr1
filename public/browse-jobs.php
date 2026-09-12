@@ -29,9 +29,12 @@ $sql = 'SELECT j.*, d.name AS department_name
 $params = ['open'];
 
 if ($search !== '') {
-    $sql .= ' AND (j.title LIKE ? OR j.description LIKE ?)';
-    $params[] = "%$search%";
-    $params[] = "%$search%";
+    $sql .= ' AND (j.title LIKE ? OR j.description LIKE ? OR j.job_code LIKE ?'
+         .  ' OR j.work_location LIKE ? OR d.name LIKE ?'
+         .  ' OR j.requirements LIKE ? OR j.required_skills LIKE ?)';
+    for ($i = 0; $i < 7; $i++) {
+        $params[] = "%$search%";
+    }
 }
 if ($locationFilter !== '') {
     $sql .= ' AND j.work_location = ?';
@@ -394,13 +397,13 @@ $icons = [
 
         <form method="get" action="browse-jobs.php" class="search-panel">
             <input type="text" name="search" placeholder="Search by job title or keyword" value="<?= e($search) ?>" aria-label="Search by job title or keyword">
-            <select name="location" aria-label="Location">
+            <select name="location" aria-label="Location" onchange="this.form.submit()">
                 <option value="">All Locations</option>
                 <?php foreach ($locations as $loc): ?>
                     <option value="<?= e($loc) ?>" <?= $locationFilter === $loc ? 'selected' : '' ?>><?= e($loc) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select name="category" aria-label="Job Category">
+            <select name="category" aria-label="Job Category" onchange="this.form.submit()">
                 <option value="">All Departments</option>
                 <?php foreach ($departments as $dept): ?>
                     <option value="<?= e((string)$dept['id']) ?>" <?= $categoryFilter == $dept['id'] ? 'selected' : '' ?>><?= e($dept['name']) ?></option>

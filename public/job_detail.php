@@ -100,11 +100,11 @@ $icons = [
             gap: .4rem;
             font-size: .875rem;
             font-weight: 600;
-            color: var(--purple);
+            color: var(--text-dark);
             text-decoration: none;
             margin-bottom: 1.5rem;
         }
-        .back-link:hover { color: var(--purple-dark); }
+        .back-link:hover { color: var(--text-dark); }
         .detail-title-section {
             margin-bottom: 1.5rem;
         }

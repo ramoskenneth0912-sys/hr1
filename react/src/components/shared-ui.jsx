@@ -83,7 +83,7 @@ export function GhostBtn({ children, icon: Icon, onClick, type = 'button', disab
             style={{
                 background: 'transparent',
                 border: `1px solid ${BD}`,
-                color: V,
+                color: TX,
                 whiteSpace: 'nowrap',
                 ...style,
             }}
@@ -181,7 +181,7 @@ export function ProgressBar({ value, color = V, showLabel = true, style }) {
             {showLabel ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontSize: '.8rem', color: TX2 }}>Progress</span>
-                    <span style={{ fontSize: '.8rem', fontWeight: 600, color: pct >= 100 ? SUCCESS : V }}>{pct}%</span>
+                    <span style={{ fontSize: '.8rem', fontWeight: 600, color: pct >= 100 ? SUCCESS : TX }}>{pct}%</span>
                 </div>
             ) : null}
             <div style={{ height: 8, borderRadius: 999, background: BD, overflow: 'hidden', ...style }}>
@@ -275,10 +275,12 @@ export function Modal({ open, onClose, title, children }) {
 }
 
 /* ---------------------------------- Toast ---------------------------------- */
-const TOAST_COLORS = { success: SUCCESS, error: DANGER, warning: WARNING, info: V };
+const TOAST_ACCENT = { success: SUCCESS, error: DANGER, warning: WARNING, info: V };
+const TOAST_TEXT = { success: SUCCESS, error: DANGER, warning: WARNING, info: TX };
 
 export function Toast({ message, type = 'info', onClose }) {
-    const color = TOAST_COLORS[type] || V;
+    const accent = TOAST_ACCENT[type] || V;
+    const textColor = TOAST_TEXT[type] || TX;
     return (
         <div
             className="ess-toast"
@@ -288,8 +290,8 @@ export function Toast({ message, type = 'info', onClose }) {
                 right: 20,
                 zIndex: 2400,
                 background: '#fff',
-                border: `1px solid ${color}`,
-                borderLeft: `4px solid ${color}`,
+                border: `1px solid ${accent}`,
+                borderLeft: `4px solid ${accent}`,
                 borderRadius: 'var(--radius-sm)',
                 boxShadow: '0 12px 30px -12px rgba(27,37,89,.35)',
                 padding: '.85rem 1rem .85rem 1.25rem',
@@ -299,7 +301,7 @@ export function Toast({ message, type = 'info', onClose }) {
                 maxWidth: 380,
             }}
         >
-            <span style={{ color, fontWeight: 700, fontSize: '.85rem', flex: 1 }}>{message}</span>
+            <span style={{ color: textColor, fontWeight: 700, fontSize: '.85rem', flex: 1 }}>{message}</span>
             {onClose ? (
                 <button
                     type="button"

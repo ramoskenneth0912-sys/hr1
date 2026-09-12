@@ -23,7 +23,7 @@ const styles = {
     },
     badge: {
         background: 'rgba(123, 44, 191, 0.12)',
-        color: '#7B2CBF',
+        color: '#2B3674',
         fontWeight: 700,
         fontSize: '.75rem',
         padding: '.25rem .6rem',

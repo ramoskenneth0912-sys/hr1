@@ -7,6 +7,14 @@ $pageTitle = $pageTitle ?? APP_NAME;
 $currentModule = $currentModule ?? '';
 $bodyClass = $bodyClass ?? '';
 
+// Some module pages report the Core HCM parent id ('hcm') even when the page
+// is actually a child entry (Employee Management + its sub-pages). Map those
+// contexts to the child id so the active indicator lands on the current page
+// and never on the expandable parent.
+$currentModuleAliases = [
+    'hcm' => 'employee-management',
+];
+
 $currentUser = getCurrentUser();
 $userRole = getUserRole();
 
@@ -78,9 +86,6 @@ if (isHRorManager()) {
     $navSections['COMMUNICATION'] = [
         ['id' => 'notifications', 'label' => 'Notifications', 'url' => BASE_URL . '/modules/employee/notifications.php', 'icon' => 'bell'],
     ];
-    $navSections['SYSTEM'] = [
-        ['id' => 'settings', 'label' => 'Settings', 'url' => BASE_URL . '/modules/employee/settings.php', 'icon' => 'settings'],
-    ];
 } elseif (isApplicant()) {
     $navSections['MAIN'] = [
         ['id' => 'applicant-dashboard', 'label' => 'My Applications', 'url' => BASE_URL . '/modules/applicant/dashboard.php', 'icon' => 'grid'],
@@ -109,7 +114,7 @@ $notifItems = $notifData['items'];
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=7">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=14">
 <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/tailwind.css">
 </head>
 <body class="<?= e($bodyClass) ?>">
@@ -139,24 +144,24 @@ require __DIR__ . '/maintenance_banner.php';
             <div class="nav-section">
                 <span class="nav-section-label"><?= e($section) ?></span>
                 <?php foreach ($items as $item): ?>
-                <?php $hasActiveChild = !empty($item['children']) && in_array($currentModule, array_column($item['children'], 'id'), true); ?>
-                <?php $isCoreHcmContext = $currentModule === $item['id'] || $hasActiveChild; ?>
+                <?php $activeChildId = $currentModuleAliases[$currentModule] ?? $currentModule; ?>
+                <?php $hasActiveChild = !empty($item['children']) && in_array($activeChildId, array_column($item['children'], 'id'), true); ?>
                 <?php if (!empty($item['children'])): ?>
-                <button type="button" class="nav-link nav-parent <?= $isCoreHcmContext ? 'active' : '' ?>" data-tooltip="<?= e($item['label']) ?>" aria-expanded="<?= $isCoreHcmContext ? 'true' : 'false' ?>" aria-controls="nav-children-<?= e($item['id']) ?>">
+                <button type="button" class="nav-link nav-parent" data-tooltip="<?= e($item['label']) ?>" aria-expanded="<?= $hasActiveChild ? 'true' : 'false' ?>" aria-controls="nav-children-<?= e($item['id']) ?>">
                     <span class="nav-icon nav-icon-<?= e($item['icon']) ?>"></span>
                     <span><?= e($item['label']) ?></span>
                     <span class="nav-chevron" aria-hidden="true">▸</span>
                 </button>
                 <?php else: ?>
-                <a href="<?= e($item['url']) ?>" class="nav-link <?= ($currentModule === $item['id'] || $hasActiveChild) ? 'active' : '' ?>" data-tooltip="<?= e($item['label']) ?>">
+                <a href="<?= e($item['url']) ?>" class="nav-link <?= $currentModule === $item['id'] ? 'active' : '' ?>" data-tooltip="<?= e($item['label']) ?>">
                     <span class="nav-icon nav-icon-<?= e($item['icon']) ?>"></span>
                     <span><?= e($item['label']) ?></span>
                 </a>
                 <?php endif; ?>
                 <?php if (!empty($item['children'])): ?>
-                <div class="nav-children" id="nav-children-<?= e($item['id']) ?>"<?= $isCoreHcmContext ? '' : ' hidden' ?>>
+                <div class="nav-children" id="nav-children-<?= e($item['id']) ?>"<?= $hasActiveChild ? '' : ' hidden' ?>>
                     <?php foreach ($item['children'] as $child): ?>
-                    <a href="<?= e($child['url']) ?>" class="nav-link nav-link-child <?= $currentModule === $child['id'] ? 'active' : '' ?>" data-tooltip="<?= e($child['label']) ?>">
+                    <a href="<?= e($child['url']) ?>" class="nav-link nav-link-child <?= $activeChildId === $child['id'] ? 'active' : '' ?>" data-tooltip="<?= e($child['label']) ?>">
                         <span class="nav-icon nav-icon-<?= e($child['icon']) ?>"></span>
                         <span><?= e($child['label']) ?></span>
                     </a>

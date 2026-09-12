@@ -275,6 +275,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php if (!$periods): ?>
     <p class="empty" style="padding:1.5rem 0;text-align:center;color:var(--text-muted);">No review periods defined yet.<?= $isHR ? ' Use the button above to create the first period.' : '' ?></p>
     <?php else: ?>
+    <div class="table-wrap">
     <table class="data-table">
         <thead>
             <tr>
@@ -313,6 +314,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
     <?php endif; ?>
 </section>
 
@@ -417,6 +419,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </form>
 
     <!-- Review list table -->
+    <div class="table-wrap">
     <table class="data-table">
         <thead>
             <tr>
@@ -476,6 +479,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php endforeach; endif; ?>
         </tbody>
     </table>
+    </div>
 </section>
 
 <!-- ======================================================================

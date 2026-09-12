@@ -258,11 +258,11 @@ if (isHRorManager()) {
     margin-bottom: 1.25rem;
 }
 .stats-insight-card {
-    background: var(--sidebar-bg);
-    border: 1px solid rgba(255,255,255,.05);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: .85rem 1rem;
-    box-shadow: 0 12px 26px -18px rgba(21, 21, 33, .55);
+    box-shadow: var(--shadow-xs);
     display: flex;
     flex-direction: column;
     gap: .35rem;
@@ -270,14 +270,15 @@ if (isHRorManager()) {
 }
 .stats-insight-label {
     font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--sidebar-text); font-weight: 700;
+    color: var(--muted); font-weight: 700;
 }
 .stats-insight-value {
-    font-size: 1.05rem; font-weight: 800; color: #ffffff;
+    font-size: 1.05rem; font-weight: 700; color: var(--text-dark);
     line-height: 1.25; word-wrap: break-word; overflow-wrap: break-word;
+    font-variant-numeric: tabular-nums;
 }
 .stats-insight-sub {
-    font-size: .82rem; color: var(--sidebar-text);
+    font-size: .82rem; color: var(--muted);
 }
 @media (max-width: 640px) {
     .stats-insights { grid-template-columns: 1fr; }
@@ -309,8 +310,8 @@ if (isHRorManager()) {
 .recruit-month-arrow {
     display: block;
     width: 7px; height: 7px;
-    border-right: 1.5px solid #222;
-    border-bottom: 1.5px solid #222;
+    border-right: 1.5px solid var(--text-dark);
+    border-bottom: 1.5px solid var(--text-dark);
     transform: rotate(45deg) translateY(-2px);
     opacity: .7;
 }
@@ -321,10 +322,10 @@ if (isHRorManager()) {
     overflow-y: auto;
     margin: 0; padding: .3rem;
     list-style: none;
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 14px 30px -12px rgba(21, 21, 33, .28);
+    box-shadow: var(--shadow-lg);
     scrollbar-width: thin;
     scrollbar-color: rgba(0,0,0,.22) transparent;
 }
@@ -334,18 +335,18 @@ if (isHRorManager()) {
 .recruit-month-menu::-webkit-scrollbar-track { background: transparent; }
 .recruit-month-menu li {
     padding: .42rem .6rem;
-    font-size: .85rem; color: #222;
+    font-size: .85rem; color: var(--text);
     border-radius: 6px; cursor: pointer;
     white-space: nowrap;
 }
-.recruit-month-menu li:hover { background: #f2f1f7; }
+.recruit-month-menu li:hover { background: var(--surface-hover); }
 .recruit-month-menu li.is-selected {
-    font-weight: 700; color: #111;
-    background: #f2f1f7;
+    font-weight: 700; color: var(--text-dark);
+    background: var(--surface-hover);
 }
 .recruit-month-menu li.is-selected::after {
     content: '✓'; float: right; font-weight: 700;
-    color: #8f8f9d; margin-left: .5rem;
+    color: var(--muted); margin-left: .5rem;
 }
 .recruit-funnel {
     background: var(--sidebar-bg);

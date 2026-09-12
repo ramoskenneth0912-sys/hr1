@@ -262,14 +262,14 @@ export default function MyCompetencies() {
                           Current: <strong style={{ color: TX }}>{a.current_level ?? "—"}</strong> / Target: <strong style={{ color: TX }}>{a.required_level}</strong>
                         </span>
                         {a.required_level_label ? (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-slate-700 border border-purple-200">
                             {a.required_level_label}
                           </span>
                         ) : null}
                         {!isMet ? (
                           <button
                             onClick={() => setSelectedCompetency(a.competency_name)}
-                            className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold border border-purple-200 transition-all flex items-center gap-1.5 shadow-sm"
+                            className="text-xs px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-slate-700 font-semibold border border-purple-200 transition-all flex items-center gap-1.5 shadow-sm"
                           >
                             <Send size={12} /> Request Review
                           </button>

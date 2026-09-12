@@ -276,6 +276,7 @@ $form = $editing ?: [
             <button class="btn btn-outline btn-sm" type="submit">Filter</button>
         </form>
     </div>
+    <div class="table-wrap">
     <table class="data-table">
         <thead><tr><th>Recipient</th><th>Title</th><th>Category</th><th>Date</th><th>Given By</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
@@ -308,5 +309,6 @@ $form = $editing ?: [
         <?php endforeach; endif; ?>
         </tbody>
     </table>
+    </div>
 </section>
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
