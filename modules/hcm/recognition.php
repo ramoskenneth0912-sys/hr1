@@ -198,10 +198,10 @@ $form = $editing ?: [
         <?php if ($editing): ?><input type="hidden" name="recognition_id" value="<?= (int) $editing['id'] ?>"><?php endif; ?>
         <div class="form-group">
             <label for="recipient_employee_id">Employee</label>
-            <select id="recipient_employee_id" name="recipient_employee_id" required <?= $editing ? 'disabled' : '' ?>>
+            <select id="recipient_employee_id" name="recipient_employee_id" required <?= $editing ? 'disabled' : '' ?> data-emp-search>
                 <option value="">Select employee</option>
                 <?php foreach ($employees as $employee): ?>
-                <option value="<?= (int) $employee['id'] ?>" <?= (int) $form['recipient_employee_id'] === (int) $employee['id'] ? 'selected' : '' ?>>
+                <option value="<?= (int) $employee['id'] ?>" <?= (int) $form['recipient_employee_id'] === (int) $employee['id'] ? 'selected' : '' ?> data-emp-no="<?= e($employee['employee_no']) ?>">
                     <?= e($employee['employee_no'] . ' — ' . $employee['first_name'] . ' ' . $employee['last_name']) ?>
                 </option>
                 <?php endforeach; ?>
@@ -266,7 +266,7 @@ $form = $editing ?: [
 <section class="panel fade-in-up" style="margin-top:1rem;">
     <div class="page-header" style="margin-bottom:1rem;">
         <div><h2>Recognition History</h2><p class="page-subtitle">Published, draft, and archived records within your authorized scope</p></div>
-        <form method="get" class="inline-form">
+        <form method="get" class="inline-form filter-toolbar">
             <select name="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="draft" <?= $statusFilter === 'draft' ? 'selected' : '' ?>>Draft</option>

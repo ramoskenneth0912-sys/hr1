@@ -30,6 +30,7 @@ $hr1User = [
 ];
 require_once __DIR__ . '/../../includes/header.php';
 ?>
+<a class="ess-back" href="<?= BASE_URL ?>/index.php"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Back</a>
 <div
     data-react-widget="my-development"
     data-hr1-user="<?= htmlspecialchars(json_encode($hr1User, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8') ?>"

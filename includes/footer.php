@@ -121,8 +121,13 @@
         collapseBtn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
     }
 
-    var saved = '0';
-    try { saved = localStorage.getItem(KEY) || '0'; } catch (err) { /* storage unavailable */ }
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (err) { /* storage unavailable */ }
+    if (saved === null) {
+        // Pages that opt in via the data-collapse-default hint start collapsed
+        // on desktop until the user explicitly changes the preference.
+        saved = layout.getAttribute('data-collapse-default') === '1' ? '1' : '0';
+    }
     apply(saved === '1');
 
     collapseBtn.addEventListener('click', function () {

@@ -37,8 +37,8 @@ $users = $stmt->fetchAll();
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
-    <form method="get" class="inline-form" style="margin-bottom: 1rem;">
-        <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search by username or employee name..." style="padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.875rem;font-family:inherit;flex:1;min-width:200px;">
+    <form method="get" class="inline-form filter-toolbar" style="margin-bottom: 1rem;">
+        <input type="text" name="search" value="<?= e($search) ?>" placeholder="Search by username or employee name..." style="flex:1;min-width:200px;max-width:360px;">
         <button type="submit" class="btn btn-outline btn-sm">Search</button>
         <?php if ($search !== ''): ?>
             <a href="<?= BASE_URL ?>/modules/users/index.php" class="btn btn-outline btn-sm">Clear</a>

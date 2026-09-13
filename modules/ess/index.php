@@ -185,9 +185,9 @@ if ($selectedEmployeeId) {
             <input type="hidden" name="action" value="leave_request">
             <div class="form-group">
                 <label for="employee_id">Employee</label>
-                <select id="employee_id" name="employee_id" required>
+                <select id="employee_id" name="employee_id" required data-emp-search>
                     <?php foreach ($employees as $emp): ?>
-                    <option value="<?= (int) $emp['id'] ?>"><?= e($emp['first_name'] . ' ' . $emp['last_name']) ?></option>
+                    <option value="<?= (int) $emp['id'] ?>" data-emp-no="<?= e($emp['employee_no']) ?>"><?= e($emp['first_name'] . ' ' . $emp['last_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -222,9 +222,9 @@ if ($selectedEmployeeId) {
             <input type="hidden" name="action" value="update_profile">
             <div class="form-group">
                 <label for="profile_employee_id">Employee</label>
-                <select id="profile_employee_id" name="employee_id" onchange="location.href='?employee_id='+this.value">
+                <select id="profile_employee_id" name="employee_id" onchange="location.href='?employee_id='+this.value" data-emp-search>
                     <?php foreach ($employees as $emp): ?>
-                    <option value="<?= (int) $emp['id'] ?>" <?= $selectedEmployeeId === (int) $emp['id'] ? 'selected' : '' ?>>
+                    <option value="<?= (int) $emp['id'] ?>" <?= $selectedEmployeeId === (int) $emp['id'] ? 'selected' : '' ?> data-emp-no="<?= e($emp['employee_no']) ?>">
                         <?= e($emp['first_name'] . ' ' . $emp['last_name']) ?>
                     </option>
                     <?php endforeach; ?>

@@ -196,6 +196,7 @@ if (!empty($_SESSION['flash'])) {
         }
         .brand-copy h1 {
             font-size: clamp(1.65rem, 2.1vw, 2.1rem);
+            color: #fff;
             font-weight: 700;
             letter-spacing: -.02em;
             margin-bottom: .8rem;

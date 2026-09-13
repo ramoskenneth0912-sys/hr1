@@ -341,10 +341,10 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-grid">
             <div class="form-group">
                 <label for="rf_employee">Employee</label>
-                <select id="rf_employee">
+                <select id="rf_employee" data-emp-search>
                     <option value="">Select employee</option>
                     <?php foreach ($employees as $emp): ?>
-                    <option value="<?= (int) $emp['id'] ?>">
+                    <option value="<?= (int) $emp['id'] ?>" data-emp-no="<?= e($emp['employee_no']) ?>">
                         <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
                     </option>
                     <?php endforeach; ?>
@@ -389,7 +389,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
     <!-- Filters -->
-    <form method="get" class="inline-form" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+    <form method="get" class="inline-form filter-toolbar" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
         <select name="period_id" aria-label="Filter by period">
             <option value="0">All periods</option>
             <?php foreach ($periods as $period): ?>
@@ -398,10 +398,10 @@ require_once __DIR__ . '/../../includes/header.php';
             </option>
             <?php endforeach; ?>
         </select>
-        <select name="employee_id" aria-label="Filter by employee">
+        <select name="employee_id" aria-label="Filter by employee" data-emp-search data-emp-autosubmit>
             <option value="0">All employees</option>
             <?php foreach ($employees as $emp): ?>
-            <option value="<?= (int) $emp['id'] ?>" <?= $filterEmpId === (int) $emp['id'] ? 'selected' : '' ?>>
+            <option value="<?= (int) $emp['id'] ?>" <?= $filterEmpId === (int) $emp['id'] ? 'selected' : '' ?> data-emp-no="<?= e($emp['employee_no']) ?>">
                 <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
             </option>
             <?php endforeach; ?>

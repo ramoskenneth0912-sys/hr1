@@ -4,6 +4,14 @@ $currentModule = 'dashboard';
 $bodyClass = 'page-dashboard';
 require_once __DIR__ . '/includes/auth.php';
 
+// Distinct body class for the employee self-service dashboard so its compact
+// enterprise layout is scoped to this page only (HR dashboard stays unchanged).
+// The employee dashboard defaults to the existing collapsed icon rail.
+if (isEmployee()) {
+    $bodyClass .= ' ess-dashboard';
+    $sidebarCollapsedByDefault = true;
+}
+
 // Role guards must run BEFORE any output (header.php streams HTML).
 // Unauthenticated visitors must not see this page — redirect them to login.
 requireLogin();
@@ -22,8 +30,10 @@ if (isEmployee()) {
     $employeeId = $user['employee_id'] ?? null;
     $uid = (int) $_SESSION['user_id'];
 
+    // ---- Summary counts (employee-scoped, from real HR1 data) ----------------
     $pendingLeave = 0;
     $docCount = 0;
+    $trainingCount = 0; // Training/Learning is a future HR3 integration — no HR1 source exists yet.
     if ($employeeId) {
         $s = db()->prepare("SELECT COUNT(*) FROM leave_requests WHERE employee_id = ? AND status = 'pending'");
         $s->execute([$employeeId]);
@@ -34,50 +44,510 @@ if (isEmployee()) {
         $docCount = (int) $s->fetchColumn();
     }
 
-    // Unread notifications count for this account (summary only — list lives in Notifications).
-    $s = db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
+    // Unread notification count for this account (matches the header bell source).
+    $s = db()->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0 AND dismissed_at IS NULL');
     $s->execute([$uid]);
     $unreadNotifs = (int) $s->fetchColumn();
+
+    // ---- My Career — summary from the existing ESS modules -------------------
+    $activeGoals = 0;
+    $latestReview = null;
+    $compCount = 0;
+    $devActive = 0;
+    if ($employeeId) {
+        $s = db()->prepare("SELECT COUNT(*) FROM employee_goals WHERE employee_id = ? AND status IN ('not_started','in_progress')");
+        $s->execute([$employeeId]);
+        $activeGoals = (int) $s->fetchColumn();
+
+        $s = db()->prepare('SELECT r.status, r.final_rating, p.name AS period_name
+                            FROM performance_reviews r
+                            LEFT JOIN review_periods p ON p.id = r.period_id
+                            WHERE r.employee_id = ?
+                            ORDER BY r.id DESC LIMIT 1');
+        $s->execute([$employeeId]);
+        $latestReview = $s->fetch() ?: null;
+
+        $s = db()->prepare("SELECT COUNT(*) FROM employee_competencies WHERE employee_id = ? AND status = 'active'");
+        $s->execute([$employeeId]);
+        $compCount = (int) $s->fetchColumn();
+
+        $s = db()->prepare("SELECT COUNT(*) FROM development_plans WHERE employee_id = ? AND status = 'in_progress'");
+        $s->execute([$employeeId]);
+        $devActive = (int) $s->fetchColumn();
+    }
+
+    $perfSummary = 'No reviews yet';
+    if ($latestReview) {
+        $periodLabel = trim((string) ($latestReview['period_name'] ?? '')) !== '' ? $latestReview['period_name'] : 'Performance review';
+        if ($latestReview['final_rating'] !== null) {
+            $perfSummary = $periodLabel . ' · ' . (int) $latestReview['final_rating'] . '/5';
+        } else {
+            $perfSummary = $periodLabel . ' · ' . str_replace('_', ' ', $latestReview['status']);
+        }
+    }
+
+    // ---- Attendance — this week's summary (only if HR1 provides an attendance table) ---
+    $attWork = null;
+    $attLate = null;
+    $attOver = null;
+    $fmtAttDur = static function (?int $sec): string {
+        if ($sec === null) { return '—'; }
+        $hours = intdiv($sec, 3600);
+        $mins  = str_pad((string) intdiv($sec % 3600, 60), 2, '0', STR_PAD_LEFT);
+        return $hours . ':' . $mins;
+    };
+    if ($employeeId) {
+        $at = db()->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
+        $at->execute(['attendance']);
+        if ((int) $at->fetchColumn() > 0) {
+            try {
+                $s = db()->prepare('SELECT work_hours, late_minutes, overtime FROM attendance
+                                    WHERE employee_id = ? AND attendance_date BETWEEN ? AND ?');
+                $s->execute([$employeeId, date('Y-m-d', strtotime('monday this week')), date('Y-m-d', strtotime('sunday this week'))]);
+                $attRows = $s->fetchAll();
+                if ($attRows) {
+                    $attToSec = static function ($v): ?int {
+                        if ($v === null || $v === '') { return null; }
+                        if (preg_match('/^(\d{1,3}):([0-5]\d)(?::([0-5]\d))?$/', (string) $v, $m)) {
+                            return ((int) $m[1] * 3600) + ((int) $m[2] * 60) + (int) ($m[3] ?? 0);
+                        }
+                        return (int) round(((float) $v) * 3600);
+                    };
+                    $tw = $tl = $to = $cw = $cl = $co = 0;
+                    foreach ($attRows as $ar) {
+                        $w = $attToSec($ar['work_hours'] ?? null); if ($w !== null) { $tw += $w; $cw++; }
+                        $l = $ar['late_minutes'] ?? null;           if ($l !== null && $l !== '') { $tl += (int) $l; $cl++; }
+                        $o = $attToSec($ar['overtime'] ?? null);    if ($o !== null) { $to += $o; $co++; }
+                    }
+                    if ($cw) { $attWork = (int) round($tw / $cw); }
+                    if ($cl) { $attLate = (int) round($tl / $cl); }
+                    if ($co) { $attOver = (int) round($to / $co); }
+                }
+            } catch (Throwable $e) {
+                /* attendance table columns differ — fall back to the empty state */
+            }
+        }
+    }
+
+    // ---- Recent Activity — merged real events from existing HR1 sources ------
+    $activity = [];
+    if ($employeeId) {
+        $s = db()->prepare('SELECT title, updated_at FROM employee_goals WHERE employee_id = ? ORDER BY updated_at DESC LIMIT 5');
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $g) {
+            $activity[] = ['title' => 'Goal updated', 'desc' => $g['title'], 'ts' => $g['updated_at'], 'icon' => 'goal'];
+        }
+        $s = db()->prepare('SELECT document_name, uploaded_at FROM employee_documents WHERE employee_id = ? ORDER BY uploaded_at DESC LIMIT 5');
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $d) {
+            $activity[] = ['title' => 'Document added', 'desc' => $d['document_name'], 'ts' => $d['uploaded_at'], 'icon' => 'doc'];
+        }
+        $s = db()->prepare("SELECT leave_type, created_at FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC LIMIT 5");
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $l) {
+            $activity[] = ['title' => 'Leave request submitted', 'desc' => ucfirst($l['leave_type']) . ' leave', 'ts' => $l['created_at'], 'icon' => 'leave'];
+        }
+    }
+    $s = db()->prepare("SELECT event_type, details, created_at FROM security_log WHERE user_id = ? AND event_type IN ('profile_updated','password_changed') ORDER BY id DESC LIMIT 5");
+    $s->execute([$uid]);
+    foreach ($s->fetchAll() as $e) {
+        $activity[] = [
+            'title' => $e['event_type'] === 'profile_updated' ? 'Profile updated' : 'Password changed',
+            'desc'  => (string) ($e['details'] ?? ''),
+            'ts'    => $e['created_at'],
+            'icon'  => $e['event_type'] === 'profile_updated' ? 'profile' : 'password',
+        ];
+    }
+    usort($activity, static function ($a, $b) { return strcmp($b['ts'], $a['ts']); });
+    $activity = array_slice($activity, 0, 5);
+
+    // ---- Upcoming — real dates only (leaves, goal due dates, dev targets) ----
+    $upcoming = [];
+    if ($employeeId) {
+        $s = db()->prepare("SELECT leave_type, start_date FROM leave_requests WHERE employee_id = ? AND start_date >= CURDATE() AND status IN ('pending','approved') ORDER BY start_date ASC LIMIT 5");
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $l) {
+            $upcoming[] = ['title' => ucfirst($l['leave_type']) . ' leave', 'desc' => 'Leave request', 'date' => $l['start_date'], 'icon' => 'leave', 'url' => BASE_URL . '/modules/employee/leave.php'];
+        }
+        $s = db()->prepare("SELECT title, due_date FROM employee_goals WHERE employee_id = ? AND due_date >= CURDATE() AND status IN ('not_started','in_progress') ORDER BY due_date ASC LIMIT 5");
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $g) {
+            $upcoming[] = ['title' => 'Goal due', 'desc' => $g['title'], 'date' => $g['due_date'], 'icon' => 'goal', 'url' => BASE_URL . '/modules/employee/goals.php'];
+        }
+        $s = db()->prepare("SELECT title, target_date FROM development_plans WHERE employee_id = ? AND target_date >= CURDATE() AND status IN ('draft','in_progress') ORDER BY target_date ASC LIMIT 5");
+        $s->execute([$employeeId]);
+        foreach ($s->fetchAll() as $d) {
+            $upcoming[] = ['title' => 'Development target', 'desc' => $d['title'], 'date' => $d['target_date'], 'icon' => 'dev', 'url' => BASE_URL . '/modules/employee/development.php'];
+        }
+    }
+    usort($upcoming, static function ($a, $b) { return strcmp($a['date'], $b['date']); });
+    $upcoming = array_slice($upcoming, 0, 4);
+
+    // Compact activity timestamp: "Today, 10:24 AM" today, otherwise "Sep 12".
+    $fmtActivityTime = static function (string $ts): string {
+        $t = strtotime($ts);
+        if (!$t) {
+            return '';
+        }
+        if (date('Y-m-d', $t) === date('Y-m-d')) {
+            return 'Today, ' . date('g:i A', $t);
+        }
+        return date('M j', $t);
+    };
+
+    // Monochrome outline icons shared across the dashboard sections.
+    $dashIcon = static function (string $name): string {
+        $icons = [
+            'leave'   => '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8"/><path d="M8 15h5"/>',
+            'doc'     => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+            'bell'    => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+            'training'=> '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+            'goal'    => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+            'performance' => '<path d="M22 12h-4l-3 9-6.5-18L5 12H2"/>',
+            'competency'  => '<path d="M12 2 2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+            'dev'     => '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
+            'learning'=> '<path d="M22 10v6"/><path d="M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+            'rocket'  => '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
+            'award'   => '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
+            'profile' => '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+            'password'=> '<path d="M21 2l-6.5 6.5"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>',
+            'cal'     => '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+            'chevron' => '<path d="M9 18l6-6-6-6"/>',
+        ];
+        $body = $icons[$name] ?? '';
+        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . $body . '</svg>';
+    };
 ?>
 
-<section class="welcome-banner fade-in-up">
+<div class="welcome-banner fade-in-up">
     <div class="welcome-content">
-        <p class="welcome-greeting"><?= e($greeting) ?>, <?= e(($user['first_name'] ?? '') ?: $user['username']) ?>!</p>
-        <h1 class="welcome-title">My Workspace</h1>
-        <p class="welcome-subtitle">Employee Self-Service — <?= e($user['job_title'] ?? 'Employee') ?><?= isset($user['department_name']) && $user['department_name'] ? ' · ' . e($user['department_name']) : '' ?></p>
+        <h1 class="welcome-title"><?= e($greeting) ?>, <?= e(($user['first_name'] ?? '') ?: $user['username']) ?>!</h1>
+        <p class="welcome-subtitle"><?= e($user['job_title'] ?? 'Employee') ?><?= !empty($user['department_name']) ? ' · ' . e($user['department_name']) : '' ?></p>
     </div>
     <div class="welcome-status">
         <span class="status-label">System Status</span>
         <span class="status-value"><span class="live-dot"></span> Synced</span>
     </div>
+</div>
+
+<section class="dash-summary-grid" aria-label="Workspace summary">
+    <a class="dash-sum-card fade-in-up" style="animation-delay:.05s" href="<?= BASE_URL ?>/modules/employee/leave.php">
+        <span class="dash-sum-head">
+            <span class="dash-sum-icon"><?= $dashIcon('leave') ?></span>
+            <span class="dash-sum-arrow"><?= $dashIcon('chevron') ?></span>
+        </span>
+        <span class="dash-sum-title">Leave Requests</span>
+        <span class="dash-sum-value"><?= $pendingLeave ?></span>
+        <span class="dash-sum-sub">Pending Requests</span>
+    </a>
+    <a class="dash-sum-card fade-in-up" style="animation-delay:.1s" href="<?= BASE_URL ?>/modules/employee/documents.php">
+        <span class="dash-sum-head">
+            <span class="dash-sum-icon"><?= $dashIcon('doc') ?></span>
+            <span class="dash-sum-arrow"><?= $dashIcon('chevron') ?></span>
+        </span>
+        <span class="dash-sum-title">Documents</span>
+        <span class="dash-sum-value"><?= $docCount ?></span>
+        <span class="dash-sum-sub">Total Documents</span>
+    </a>
+    <a class="dash-sum-card fade-in-up" style="animation-delay:.15s" href="<?= BASE_URL ?>/modules/employee/notifications.php">
+        <span class="dash-sum-head">
+            <span class="dash-sum-icon"><?= $dashIcon('bell') ?></span>
+            <span class="dash-sum-arrow"><?= $dashIcon('chevron') ?></span>
+        </span>
+        <span class="dash-sum-title">Notifications</span>
+        <span class="dash-sum-value"><?= $unreadNotifs ?></span>
+        <span class="dash-sum-sub">Unread Notifications</span>
+    </a>
+    <a class="dash-sum-card fade-in-up" style="animation-delay:.2s" href="<?= BASE_URL ?>/modules/employee/trainings.php">
+        <span class="dash-sum-head">
+            <span class="dash-sum-icon"><?= $dashIcon('training') ?></span>
+            <span class="dash-sum-arrow"><?= $dashIcon('chevron') ?></span>
+        </span>
+        <span class="dash-sum-title">Training</span>
+        <span class="dash-sum-value"><?= $trainingCount ?></span>
+        <span class="dash-sum-sub">Assigned Training</span>
+    </a>
 </section>
 
-<div class="stats-grid">
-    <div class="kpi-card fade-in-up" style="animation-delay:.1s">
-        <div class="kpi-top">
-            <span class="kpi-icon kpi-icon-teal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
+<div class="dash-workspace">
+    <div class="dash-main-col">
+        <!-- My Career -->
+        <div class="dash-panel fade-in-up" style="animation-delay:.25s">
+            <div class="dash-panel-head">
+                <h2>My Career</h2>
+            </div>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/goals.php">
+                <span class="dash-row-icon"><?= $dashIcon('goal') ?></span>
+                <span class="dash-row-label">My Goals</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/performance.php">
+                <span class="dash-row-icon"><?= $dashIcon('performance') ?></span>
+                <span class="dash-row-label">My Performance</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/competencies.php">
+                <span class="dash-row-icon"><?= $dashIcon('competency') ?></span>
+                <span class="dash-row-label">My Competencies</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/trainings.php">
+                <span class="dash-row-icon"><?= $dashIcon('training') ?></span>
+                <span class="dash-row-label">My Trainings</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/learning.php">
+                <span class="dash-row-icon"><?= $dashIcon('learning') ?></span>
+                <span class="dash-row-label">My Learning</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/development.php">
+                <span class="dash-row-icon"><?= $dashIcon('rocket') ?></span>
+                <span class="dash-row-label">My Development</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
+            <a class="dash-row" href="<?= BASE_URL ?>/modules/employee/recognition.php">
+                <span class="dash-row-icon"><?= $dashIcon('award') ?></span>
+                <span class="dash-row-label">My Recognition</span>
+                <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+            </a>
         </div>
-        <span class="kpi-value"><?= $pendingLeave ?></span>
-        <span class="kpi-label">Pending Leave Requests</span>
-        <a href="<?= BASE_URL ?>/modules/employee/leave.php" class="kpi-link">View Leave Requests &rarr;</a>
-    </div>
-    <div class="kpi-card fade-in-up" style="animation-delay:.4s">
-        <div class="kpi-top">
-            <span class="kpi-icon kpi-icon-orange"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+
+        <!-- Recent Activity -->
+        <div class="dash-panel fade-in-up" style="animation-delay:.3s">
+            <div class="dash-panel-head">
+                <h2>Recent Activity</h2>
+                <a class="dash-view-all" href="<?= BASE_URL ?>/modules/employee/notifications.php">View all</a>
+            </div>
+            <?php if (empty($activity)): ?>
+            <div class="dash-empty">No recent activity yet.</div>
+            <?php else: ?>
+                <?php foreach ($activity as $act): ?>
+                <div class="dash-row">
+                    <span class="dash-row-icon"><?= $dashIcon($act['icon']) ?></span>
+                    <span class="dash-row-body">
+                        <span class="dash-row-label"><?= e($act['title']) ?></span>
+                        <span class="dash-row-desc"><?= e($act['desc']) ?></span>
+                    </span>
+                    <span class="dash-row-meta"><?= e($fmtActivityTime($act['ts'])) ?></span>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-        <span class="kpi-value"><?= $docCount ?></span>
-        <span class="kpi-label">My Documents</span>
-        <a href="<?= BASE_URL ?>/modules/employee/documents.php" class="kpi-link">Open &rarr;</a>
-    </div>
-    <div class="kpi-card fade-in-up" style="animation-delay:.5s">
-        <div class="kpi-top">
-            <span class="kpi-icon kpi-icon-purple"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+
+        <!-- Attendance -->
+        <div class="dash-panel fade-in-up" style="animation-delay:.35s">
+            <div class="dash-panel-head">
+                <h2>Attendance</h2>
+                <a class="dash-view-all" href="<?= BASE_URL ?>/modules/employee/attendance.php">View all</a>
+            </div>
+            <div class="dash-att-stats">
+                <div class="dash-att-stat"><span class="dash-att-value<?= $attWork === null ? ' muted' : '' ?>"><?= $attWork === null ? '—' : $fmtAttDur($attWork) ?></span><span class="dash-att-label">Work Hours</span></div>
+                <div class="dash-att-stat"><span class="dash-att-value<?= $attLate === null ? ' muted' : '' ?>"><?= $attLate === null ? '—' : $attLate . 'm' ?></span><span class="dash-att-label">Late</span></div>
+                <div class="dash-att-stat"><span class="dash-att-value<?= $attOver === null ? ' muted' : '' ?>"><?= $attOver === null ? '—' : $fmtAttDur($attOver) ?></span><span class="dash-att-label">Overtime</span></div>
+            </div>
+            <div class="dash-att-meta"><span class="live-dot"></span> This Week<span class="dash-att-note"><?= $attWork === null ? '· no records' : '· real-time data' ?></span></div>
         </div>
-        <span class="kpi-value"><?= $unreadNotifs ?></span>
-        <span class="kpi-label">Unread Notifications</span>
-        <a href="<?= BASE_URL ?>/modules/employee/notifications.php" class="kpi-link">View Notifications &rarr;</a>
     </div>
+
+    <aside class="dash-side-col">
+        <!-- Upcoming -->
+        <div class="dash-panel fade-in-up" style="animation-delay:.35s">
+            <div class="dash-panel-head">
+                <h2>Upcoming</h2>
+                <a class="dash-view-all" href="<?= BASE_URL ?>/modules/employee/trainings.php">View all</a>
+            </div>
+            <?php if (empty($upcoming)): ?>
+            <div class="dash-empty">Nothing upcoming.</div>
+            <?php else: ?>
+                <?php foreach ($upcoming as $u): ?>
+                <a class="dash-row" href="<?= e($u['url']) ?>">
+                    <span class="dash-date"><strong><?= e(strtoupper(date('M', strtotime($u['date'])))) ?></strong><span><?= e(date('j', strtotime($u['date']))) ?></span></span>
+                    <span class="dash-row-body">
+                        <span class="dash-row-label"><?= e($u['title']) ?></span>
+                        <span class="dash-row-desc"><?= e($u['desc']) ?></span>
+                    </span>
+                    <span class="dash-row-chevron"><?= $dashIcon('chevron') ?></span>
+                </a>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </aside>
 </div>
+
+<style>
+/* Employee dashboard — compact enterprise layout (scoped to body.ess-dashboard).
+   Reuses the existing design tokens (surface, border, radius, shadows). */
+.ess-dashboard .dashboard-logo-bg { display: none; }
+.ess-dashboard .live-badge { display: none; }
+.ess-dashboard .container { padding: 1.25rem 1.5rem 2rem; }
+
+/* Compact purple greeting banner — scoped to the employee ESS dashboard only.
+   Reuses the shared .welcome-banner purple design; only spacing trimmed. */
+.ess-dashboard .welcome-banner {
+    margin-bottom: 1.25rem;
+}
+
+/* Compact top summary cards with very subtle per-card accents. */
+.dash-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.dash-sum-card {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .8rem 1rem;
+    box-shadow: var(--shadow-xs);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+.dash-sum-card:hover { border-color: var(--purple-light); box-shadow: var(--shadow-md); text-decoration: none; }
+.dash-sum-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
+.dash-sum-icon { display: inline-flex; color: var(--muted); }
+.dash-sum-arrow { display: inline-flex; color: var(--muted); opacity: .45; }
+.dash-sum-card:hover .dash-sum-arrow { opacity: .85; }
+.dash-sum-title { font-size: .68rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.dash-sum-value { font-size: 1.5rem; font-weight: 700; color: var(--text-dark); letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.dash-sum-sub { font-size: .7rem; color: var(--muted); }
+
+/* Two-column workspace: wide main column + narrow side column. */
+.dash-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: .875rem;
+    align-items: start;
+}
+.dash-main-col { display: flex; flex-direction: column; gap: .875rem; min-width: 0; }
+.dash-side-col { display: flex; flex-direction: column; gap: .875rem; min-width: 0; }
+
+.dash-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.05rem .95rem;
+    box-shadow: var(--shadow-xs);
+    min-width: 0;
+}
+.dash-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .4rem; padding-bottom: .6rem; border-bottom: 1px solid var(--border); }
+.dash-panel-head h2 { font-size: .9375rem; font-weight: 700; color: var(--text-dark); letter-spacing: -.01em; margin: 0; }
+.dash-view-all { font-size: .75rem; font-weight: 600; color: var(--muted); text-decoration: none; }
+.dash-view-all:hover { color: var(--purple); text-decoration: none; }
+
+.dash-row {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    width: 100%;
+    min-height: 44px;
+    padding: .55rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: none;
+    color: inherit;
+}
+.dash-row:first-child { border-top: 0; }
+.dash-row:hover { text-decoration: none; }
+.dash-row-icon { display: inline-flex; flex: 0 0 auto; color: var(--purple); opacity: .5; }
+.dash-row-label { flex: 1 1 auto; min-width: 0; font-size: .83rem; font-weight: 600; color: var(--text-dark); }
+.dash-row-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .05rem; }
+.dash-row-desc { margin: 0; font-size: .7rem; color: var(--muted); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row-meta { flex: 0 0 auto; font-size: .68rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.dash-row-chevron { flex: 0 0 auto; display: inline-flex; color: var(--text-dark); opacity: .35; transition: opacity .15s ease; }
+.dash-row:hover .dash-row-chevron { opacity: .85; }
+.dash-row:hover .dash-row-icon { opacity: .9; }
+
+.dash-date {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    padding: .3rem 0 .26rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+}
+.dash-date strong { font-size: .62rem; font-weight: 700; color: var(--muted); letter-spacing: .05em; }
+.dash-date span { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+.dash-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem .5rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.dash-att-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .75rem;
+}
+.dash-att-stat {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    padding: .6rem .75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.dash-att-value {
+    font-size: .98rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    letter-spacing: -.01em;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+.dash-att-value.muted { color: var(--muted); font-weight: 600; }
+.dash-att-label {
+    font-size: .66rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+.dash-att-meta {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: .6rem;
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+.dash-att-note { color: var(--muted); font-weight: 500; }
+
+@media (max-width: 1100px) {
+    .dash-workspace { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+    .dash-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+    .ess-dashboard .container { padding: 0 1rem 1.5rem; }
+    .ess-dashboard .welcome-status { text-align: left; }
+    .dash-summary-grid { grid-template-columns: 1fr; }
+}
+</style>
 
 <?php
     require_once __DIR__ . '/includes/footer.php';

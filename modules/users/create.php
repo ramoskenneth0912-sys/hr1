@@ -122,10 +122,10 @@ require_once __DIR__ . '/../../includes/header.php';
     <div class="form-grid">
         <div class="form-group">
             <label for="employee_id">Linked Employee *</label>
-            <select id="employee_id" name="employee_id" required>
+            <select id="employee_id" name="employee_id" required data-emp-search>
                 <option value="">— Select Employee —</option>
                 <?php foreach ($unlinked as $emp): ?>
-                    <option value="<?= (int) $emp['id'] ?>" <?= ((int) ($old['employee_id'] ?? 0)) === (int) $emp['id'] ? 'selected' : '' ?>>
+                    <option value="<?= (int) $emp['id'] ?>" <?= ((int) ($old['employee_id'] ?? 0)) === (int) $emp['id'] ? 'selected' : '' ?> data-emp-no="<?= e($emp['employee_no']) ?>">
                         <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name'] . ($emp['job_title'] ? ' (' . $emp['job_title'] . ')' : '')) ?>
                     </option>
                 <?php endforeach; ?>

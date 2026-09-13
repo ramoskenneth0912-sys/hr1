@@ -185,16 +185,6 @@ function recordDocRow(array $r): array
 <section class="panel fade-in-up" style="animation-delay:.1s">
     <h2>Select Employee</h2>
     <style>
-        .records-search { display: flex; align-items: center; gap: .4rem; }
-        .records-search input {
-            padding: .5rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
-            font-size: .875rem; font-family: inherit; color: var(--text); background: var(--surface);
-            min-width: 240px;
-        }
-        .records-search input::placeholder { color: var(--muted); }
-        .records-search input:focus { outline: none; border-color: var(--purple-light); box-shadow: 0 0 0 3px var(--purple-bg); }
-        .records-search .btn { display: inline-flex; align-items: center; justify-content: center; padding: .5rem .7rem; }
-        .records-search .btn svg { display: block; }
         .search-results { margin-top: .75rem; }
         .result-list { margin: 0; padding-left: 1.4rem; list-style: none; font-size: .875rem; color: var(--text); }
         .result-list li { margin-bottom: .3rem; }
@@ -202,16 +192,14 @@ function recordDocRow(array $r): array
         .result-list a { color: var(--text-dark); text-decoration: none; }
         .result-list a:hover { text-decoration: underline; }
     </style>
-    <form method="get" class="inline-form">
-        <div class="records-search">
-            <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search number, name, role, or department..." aria-label="Search employees">
-            <button type="submit" class="btn" aria-label="Search employees">
+    <form method="get" class="inline-form filter-toolbar" style="margin-bottom: .75rem;">
+        <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search number, name, role, or department..." aria-label="Search employees" style="flex:1;min-width:240px;max-width:420px;">
+        <button type="submit" class="btn btn-outline btn-icon" aria-label="Search employees">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
             <?php if ($q !== ''): ?>
             <a href="<?= BASE_URL ?>/modules/records/index.php" class="btn btn-outline btn-sm">Clear</a>
             <?php endif; ?>
-        </div>
     </form>
     <?php if ($q !== ''): ?>
     <div class="search-results">

@@ -222,10 +222,10 @@ $form = $editing ?: [
         <?php if ($editing): ?><input type="hidden" name="goal_id" value="<?= (int) $editing['id'] ?>"><?php endif; ?>
         <div class="form-group">
             <label for="employee_id">Employee</label>
-            <select id="employee_id" name="employee_id" <?= $editing ? 'disabled' : 'required' ?>>
+            <select id="employee_id" name="employee_id" <?= $editing ? 'disabled' : 'required' ?> data-emp-search>
                 <option value="">Select employee</option>
                 <?php foreach ($employees as $employee): ?>
-                <option value="<?= (int) $employee['id'] ?>" <?= (int) $form['employee_id'] === (int) $employee['id'] ? 'selected' : '' ?>>
+                <option value="<?= (int) $employee['id'] ?>" <?= (int) $form['employee_id'] === (int) $employee['id'] ? 'selected' : '' ?> data-emp-no="<?= e($employee['employee_no']) ?>">
                     <?= e($employee['employee_no'] . ' — ' . $employee['first_name'] . ' ' . $employee['last_name']) ?>
                 </option>
                 <?php endforeach; ?>
@@ -284,11 +284,11 @@ $form = $editing ?: [
 <section class="panel fade-in-up" style="margin-top:1rem;">
     <div class="page-header" style="margin-bottom:1rem;">
         <div><h2>Goal History</h2><p class="page-subtitle">Monitor assigned goals and current employee progress</p></div>
-        <form method="get" class="inline-form">
-            <select name="employee_id" aria-label="Filter by employee">
+        <form method="get" class="inline-form filter-toolbar">
+            <select name="employee_id" aria-label="Filter by employee" data-emp-search data-emp-autosubmit>
                 <option value="0">All employees</option>
                 <?php foreach ($employees as $employee): ?>
-                <option value="<?= (int) $employee['id'] ?>" <?= $employeeFilter === (int) $employee['id'] ? 'selected' : '' ?>><?= e($employee['employee_no'] . ' — ' . $employee['first_name'] . ' ' . $employee['last_name']) ?></option>
+                <option value="<?= (int) $employee['id'] ?>" <?= $employeeFilter === (int) $employee['id'] ? 'selected' : '' ?> data-emp-no="<?= e($employee['employee_no']) ?>"><?= e($employee['employee_no'] . ' — ' . $employee['first_name'] . ' ' . $employee['last_name']) ?></option>
                 <?php endforeach; ?>
             </select>
             <select name="status" aria-label="Filter by status">
@@ -299,6 +299,9 @@ $form = $editing ?: [
                 <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
             </select>
             <button class="btn btn-outline btn-sm" type="submit">Filter</button>
+            <?php if ($employeeFilter > 0 || $statusFilter !== ''): ?>
+            <a class="btn btn-outline btn-sm" href="goals.php">Clear</a>
+            <?php endif; ?>
         </form>
     </div>
     <table class="data-table">

@@ -299,7 +299,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
     <!-- Catalog filter bar -->
-    <form method="get" class="inline-form" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+    <form method="get" class="inline-form filter-toolbar" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
         <!-- Preserve assignment filters when filtering catalog -->
         <?php if ($filterEmpId > 0): ?><input type="hidden" name="filter_employee_id" value="<?= $filterEmpId ?>"><?php endif; ?>
         <?php if ($filterCompId > 0): ?><input type="hidden" name="filter_competency_id" value="<?= $filterCompId ?>"><?php endif; ?>
@@ -432,10 +432,10 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-grid">
             <div class="form-group">
                 <label for="af_employee">Employee <span style="color:var(--danger,#e53e3e)">*</span></label>
-                <select id="af_employee" required>
+                <select id="af_employee" required data-emp-search>
                     <option value="">Select employee</option>
                     <?php foreach ($employees as $emp): ?>
-                    <option value="<?= (int) $emp['id'] ?>">
+                    <option value="<?= (int) $emp['id'] ?>" data-emp-no="<?= e($emp['employee_no']) ?>">
                         <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?><?= $emp['job_title'] ? ' (' . e($emp['job_title']) . ')' : '' ?>
                     </option>
                     <?php endforeach; ?>
@@ -494,16 +494,16 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
     <!-- Assignments filter bar -->
-    <form method="get" class="inline-form" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+    <form method="get" class="inline-form filter-toolbar" style="flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
         <!-- Preserve catalog filters when filtering assignments -->
         <?php if ($catStatus !== 'all'): ?><input type="hidden" name="cat_status" value="<?= e($catStatus) ?>"><?php endif; ?>
         <?php if ($catCategory !== ''): ?><input type="hidden" name="cat_category" value="<?= e($catCategory) ?>"><?php endif; ?>
         <?php if ($catQ !== ''): ?><input type="hidden" name="cat_q" value="<?= e($catQ) ?>"><?php endif; ?>
 
-        <select name="filter_employee_id" aria-label="Filter assignments by employee">
+        <select name="filter_employee_id" aria-label="Filter assignments by employee" data-emp-search data-emp-autosubmit>
             <option value="0">All employees</option>
             <?php foreach ($employees as $emp): ?>
-            <option value="<?= (int) $emp['id'] ?>" <?= $filterEmpId === (int) $emp['id'] ? 'selected' : '' ?>>
+            <option value="<?= (int) $emp['id'] ?>" <?= $filterEmpId === (int) $emp['id'] ? 'selected' : '' ?> data-emp-no="<?= e($emp['employee_no']) ?>">
                 <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
             </option>
             <?php endforeach; ?>
