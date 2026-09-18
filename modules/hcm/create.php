@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         goto renderEmployeeCreate;
     }
 
-    $employeeNo = generateCode('EMP', 'employees', 'employee_no');
+    $employeeNo = generateCode('E', 'employees', 'employee_no', 3);
 
     $stmt = db()->prepare(
         'INSERT INTO employees (employee_no, first_name, last_name, email, phone, department_id,

@@ -165,7 +165,13 @@ class AuthController
 
     private static function findUser(int $id): array
     {
-        $stmt = db()->prepare('SELECT id, username, email, role, employee_id, created_at FROM users WHERE id = :id LIMIT 1');
+        $stmt = db()->prepare(
+            'SELECT u.id, u.username, u.email, u.role, u.employee_id, u.is_active, u.created_at,
+                    e.employee_no
+             FROM users u
+             LEFT JOIN employees e ON e.id = u.employee_id
+             WHERE u.id = :id LIMIT 1'
+        );
         $stmt->execute([':id' => $id]);
         return $stmt->fetch() ?: [];
     }
@@ -173,12 +179,35 @@ class AuthController
     /** Public user shape — NEVER includes password_hash. */
     public static function userShape(array $u): array
     {
+        $employeeNo = null;
+        if (!empty($u['employee_no'])) {
+            $employeeNo = $u['employee_no'];
+        } elseif (!empty($u['employee_id'])) {
+            // Resolve the official identifier (E-series) from the numeric FK when
+            // the caller's user row does not carry employee_no.
+            $stmt = db()->prepare('SELECT employee_no FROM employees WHERE id = :id LIMIT 1');
+            $stmt->execute([':id' => (int) $u['employee_id']]);
+            $employeeNo = $stmt->fetchColumn() ?: null;
+        } elseif (!empty($u['id'])) {
+            // Bearer/session rows carry only users.id/username/email/role — resolve
+            // the linked employee's official identifier through users.employee_id.
+            $stmt = db()->prepare(
+                'SELECT e.employee_no
+                 FROM users u
+                 LEFT JOIN employees e ON e.id = u.employee_id
+                 WHERE u.id = :id LIMIT 1'
+            );
+            $stmt->execute([':id' => (int) $u['id']]);
+            $employeeNo = $stmt->fetchColumn() ?: null;
+        }
+
         return [
             'id' => isset($u['id']) ? (int) $u['id'] : null,
             'username' => $u['username'] ?? null,
             'email' => $u['email'] ?? null,
             'role' => $u['role'] ?? null,
-            'employee_id' => isset($u['employee_id']) && $u['employee_id'] !== null ? (int) $u['employee_id'] : null,
+            'employee_id' => $employeeNo !== null ? (string) $employeeNo : null,
+            'employee_no' => $employeeNo !== null ? (string) $employeeNo : null,
             'is_active' => isset($u['is_active']) ? (int) $u['is_active'] : null,
             'created_at' => $u['created_at'] ?? null,
         ];

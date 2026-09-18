@@ -215,7 +215,7 @@ function createEmployeeAccountFromApplicant(array $applicant, int $createdBy): a
     if ($existingUser->fetch()) {
         return [false, 'A user account with this email already exists.'];
     }
-    $employeeNo = generateCode('EMP', 'employees', 'employee_no');
+    $employeeNo = generateCode('E', 'employees', 'employee_no', 3);
     $tempPassword = bin2hex(random_bytes(6));
     try {
         db()->beginTransaction();

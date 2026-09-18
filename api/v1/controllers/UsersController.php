@@ -44,8 +44,11 @@ class UsersController
         $total = (int) $countStmt->fetch()['c'];
 
         $stmt = db()->prepare(
-            "SELECT u.id, u.username, u.email, u.role, u.employee_id, u.is_active, u.created_at
-             FROM users u $whereSql ORDER BY u.id ASC LIMIT :lim OFFSET :off"
+            "SELECT u.id, u.username, u.email, u.role, u.employee_id, u.is_active, u.created_at,
+                    e.employee_no
+             FROM users u
+             LEFT JOIN employees e ON e.id = u.employee_id
+             $whereSql ORDER BY u.id ASC LIMIT :lim OFFSET :off"
         );
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
@@ -176,7 +179,11 @@ class UsersController
     private static function findUser(int $id): ?array
     {
         $stmt = db()->prepare(
-            'SELECT id, username, email, role, employee_id, is_active, created_at FROM users WHERE id = :id LIMIT 1'
+            'SELECT u.id, u.username, u.email, u.role, u.employee_id, u.is_active, u.created_at,
+                    e.employee_no
+             FROM users u
+             LEFT JOIN employees e ON e.id = u.employee_id
+             WHERE u.id = :id LIMIT 1'
         );
         $stmt->execute([':id' => $id]);
         return $stmt->fetch() ?: null;

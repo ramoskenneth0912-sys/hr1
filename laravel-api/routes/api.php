@@ -46,6 +46,12 @@ Route::get('/health', function () {
 Route::middleware('auth:legacy')->get('/auth/me', function (Illuminate\Http\Request $request) {
     $user = $request->user();
 
+    $employeeNo = null;
+    if ($user->employee_id !== null) {
+        $employeeNo = \App\Models\Employee::where('id', (int) $user->employee_id)->value('employee_no');
+        $employeeNo = $employeeNo !== null ? (string) $employeeNo : null;
+    }
+
     return response()->json([
         'success' => true,
         'message' => 'Current user retrieved successfully.',
@@ -54,7 +60,8 @@ Route::middleware('auth:legacy')->get('/auth/me', function (Illuminate\Http\Requ
             'username' => $user->username,
             'email' => $user->email,
             'role' => $user->role,
-            'employee_id' => $user->employee_id !== null ? (int) $user->employee_id : null,
+            'employee_id' => $employeeNo,
+            'employee_no' => $employeeNo,
             'created_at' => $user->created_at,
         ],
     ], 200, [], JSON_UNESCAPED_UNICODE);

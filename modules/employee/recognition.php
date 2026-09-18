@@ -26,6 +26,7 @@ $reactEntry = 'main';
 
 $hr1User = [
     'employee_id' => $employeeId,
+    'employee_no' => $user['employee_no'] ?? null,
     'name' => trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')),
 ];
 require_once __DIR__ . '/../../includes/header.php';

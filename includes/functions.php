@@ -44,11 +44,12 @@ function getFlash(): ?array
     return null;
 }
 
-function generateCode(string $prefix, string $table, string $column): string
+function generateCode(string $prefix, string $table, string $column, int $padLength = 5): string
 {
     if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $table) ||
         !preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $column) ||
-        !preg_match('/^[a-zA-Z0-9]+$/', $prefix)) {
+        !preg_match('/^[a-zA-Z0-9]+$/', $prefix) ||
+        $padLength < 1) {
         throw new InvalidArgumentException('Invalid identifier in generateCode()');
     }
 
@@ -60,7 +61,7 @@ function generateCode(string $prefix, string $table, string $column): string
     $stmt->execute([':like' => $likePrefix . '%']);
     $row = $stmt->fetch();
     $next = ((int) ($row['max_num'] ?? 0)) + 1;
-    return $prefix . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+    return $prefix . str_pad((string) $next, $padLength, '0', STR_PAD_LEFT);
 }
 
 function getDepartments(): array
