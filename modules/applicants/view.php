@@ -128,7 +128,17 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php endif; ?>
     </span></div>
     <div class="detail-item full-width"><label>Address</label><span><?= e($applicant['address'] ?: '—') ?></span></div>
-    <div class="detail-item full-width"><label>Notes</label><span><?= e($applicant['notes'] ?: '—') ?></span></div>
+    <div class="detail-item full-width"><label>Cover Letter</label><span>
+        <?php if (($applicant['cover_letter_method'] ?? '') === 'upload'): ?>
+            <?php if (!empty($applicant['cover_letter_path'])): ?>
+            <a href="cover_letter_file.php?id=<?= $id ?>" target="_blank" class="btn btn-sm btn-outline">View Uploaded Cover Letter</a>
+            <?php else: ?>
+            —
+            <?php endif; ?>
+        <?php else: ?>
+            <?= $applicant['notes'] ? nl2br(e($applicant['notes'])) : '—' ?>
+        <?php endif; ?>
+    </span></div>
 </section>
 
 <?php if ($activeInterview !== null): ?>

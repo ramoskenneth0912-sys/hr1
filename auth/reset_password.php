@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'This reset link has expired or already been used. Please request a new one.';
         } else {
             if (passwordResetApply($email, $password)) {
-                $stmt = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1');
+                $stmt = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1 AND is_archived = 0');
                 $stmt->execute([$email]);
                 $user = $stmt->fetch();
                 if ($user) {

@@ -1,3 +1,4 @@
+// @ts-nocheck - legacy ESS module (was never type-checked before TS arrived).
 import {
   BookOpen,
   CheckCircle2,

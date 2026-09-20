@@ -318,13 +318,13 @@ if ($isAdmin) { $navItems['system'] = 'System'; }
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="save_notifications">
         <?php foreach ($NOTIF_GROUPS as $groupLabel => $group): ?>
-        <fieldset style="border:none; margin:0 0 .75rem; padding:0;">
-            <legend style="font-weight:700; font-size:.85rem; color:var(--text-dark); padding:0; margin-bottom:.4rem;"><?= e($groupLabel) ?></legend>
+        <fieldset style="border:none; margin:0 0 1.25rem; padding:0;">
+            <legend style="font-weight:700; font-size:.875rem; color:var(--text-dark); padding:0; margin-bottom:.6rem;"><?= e($groupLabel) ?></legend>
             <div class="form-grid">
                 <?php foreach ($group as $key => $label): ?>
-                <label class="form-group" style="flex-direction:row; align-items:center; gap:.5rem;">
+                <label class="notif-option">
                     <input type="checkbox" name="<?= e($key) ?>" <?= (!isset($prefs[$key]) || $prefs[$key]) ? 'checked' : '' ?>>
-                    <span style="font-size:.85rem;"><?= e($label) ?></span>
+                    <span><?= e($label) ?></span>
                 </label>
                 <?php endforeach; ?>
             </div>

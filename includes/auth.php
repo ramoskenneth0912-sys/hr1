@@ -115,7 +115,7 @@ function requireApplicant(): void
 function loginUser(string $username, string $password): bool
 {
     $stmt = db()->prepare(
-        'SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1'
+        'SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1 AND is_archived = 0'
     );
     $stmt->execute([$username, $username]);
     $user = $stmt->fetch();

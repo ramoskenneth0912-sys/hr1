@@ -159,6 +159,9 @@ class ApplicationsController
                 $errors[$f] = ucfirst(str_replace('_', ' ', $f)) . ' is required.';
             }
         }
+        if (!isset($in['cover_letter']) || trim((string) $in['cover_letter']) === '') {
+            $errors['cover_letter'] = 'Cover letter is required.';
+        }
         if (isset($in['email']) && trim((string) $in['email']) !== ''
             && !filter_var(trim((string) $in['email']), FILTER_VALIDATE_EMAIL)) {
             $errors['email'] = 'A valid email address is required.';

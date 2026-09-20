@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS applicants (
     status ENUM('new', 'screening', 'interview', 'offered', 'hired', 'rejected') DEFAULT 'new',
     applied_date DATE NOT NULL,
     notes TEXT,
+    cover_letter_method ENUM('write','upload') NULL DEFAULT NULL,
+    cover_letter_path VARCHAR(255) NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
@@ -47,6 +49,7 @@ CREATE TABLE IF NOT EXISTS job_postings (
     title VARCHAR(150) NOT NULL,
     department_id INT,
     description TEXT,
+    about_role TEXT,
     requirements TEXT,
     qualifications TEXT,
     required_skills TEXT,

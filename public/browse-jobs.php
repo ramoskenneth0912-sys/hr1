@@ -60,6 +60,7 @@ $icons = [
     'monitor'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
     'calendar'  => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
     'users'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    'money'     => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Monthly salary"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>',
 ];
 ?>
 <!DOCTYPE html>
@@ -225,6 +226,12 @@ $icons = [
             color: #241C4F;
             letter-spacing: -.01em;
             margin-bottom: .45rem;
+        }
+        .job-company {
+            margin: 0 0 .5rem;
+            font-size: .9rem;
+            font-weight: 600;
+            color: var(--pub-brand);
         }
         .job-meta {
             display: flex;
@@ -429,6 +436,7 @@ $icons = [
                     <div class="job-row" style="animation-delay: <?= number_format($i * 0.06, 2) ?>s">
                         <div class="job-row-main">
                             <h3><?= e($job['title']) ?></h3>
+                            <p class="job-company">TRI-M Global Logistics &amp; Trading Inc.</p>
                             <div class="job-meta">
                                 <span class="meta-item"><?= $icons['briefcase'] ?><?= e($job['department_name'] ?? 'N/A') ?></span>
                                 <span class="meta-item"><?= $icons['pin'] ?><?= e($job['work_location'] ?? 'N/A') ?></span>
@@ -437,6 +445,8 @@ $icons = [
                                 <?php if (!empty($job['vacancies'])): ?>
                                     <span class="meta-item"><?= $icons['users'] ?><?= (int)$job['vacancies'] ?> vacanc<?= $job['vacancies'] == 1 ? 'y' : 'ies' ?></span>
                                 <?php endif; ?>
+                                <?php $cardSalary = trim((string) ($job['salary_compensation'] ?? '')); ?>
+                                <span class="meta-item"><?= $icons['money'] ?><?= $cardSalary !== '' ? e($cardSalary) : '—' ?></span>
                             </div>
                             <?php if (!empty($job['description'])): ?>
                                 <p class="job-excerpt"><?= e(mb_strimwidth(strip_tags((string)$job['description']), 0, 160, '…')) ?></p>

@@ -36,7 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['confirm'] ?? '') === 'yes'
 
     // Deactivate only the account — never delete the linked employee record.
     db()->prepare("UPDATE users SET is_active = 0 WHERE id = ?")->execute([$user_id]);
-    securityLog('user_account_deactivated', "user_id={$user_id} username={$user['username']}", (int) ($_SESSION['user_id'] ?? 0));
+    securityLog('USER_DEACTIVATED', "Deactivated account \"{$user['username']}\"", (int) ($_SESSION['user_id'] ?? 0), [
+        'module'      => 'users',
+        'target_type' => 'user',
+        'target_id'   => $user_id,
+        'status'      => 'success',
+    ]);
 
     flash('success', 'User account deactivated. The account will no longer be able to sign in.');
     redirect(BASE_URL . '/modules/users/index.php');

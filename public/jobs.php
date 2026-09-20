@@ -12,6 +12,13 @@ $totalOpen = (int) db()->query(
     "SELECT COUNT(*) FROM job_postings WHERE status = 'open'"
 )->fetchColumn();
 
+// Map open job titles to their DB primary key, so each career banner links
+// directly to its matching job posting (exact title match, open only).
+$openJobIds = [];
+foreach (db()->query("SELECT id, title FROM job_postings WHERE status = 'open'")->fetchAll() as $openJobRow) {
+    $openJobIds[strtolower(trim((string) $openJobRow['title']))] = (int) $openJobRow['id'];
+}
+
 $professions = [
     [
         'img'  => '../assets/images/job-marketing.png',
@@ -788,22 +795,7 @@ $professions = [
             gap: 18px;
             min-width: 0;
         }
-        .footer-brand img {
-            height: 68px;
-            width: auto;
-            display: block;
-            box-sizing: content-box;
-            padding: 9px 14px;
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 4px 14px rgba(18,16,46,.22);
-        }
-        .footer-divider {
-            width: 1px;
-            align-self: stretch;
-            margin: 6px 4px;
-            background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.32) 30%, rgba(255,255,255,.32) 70%, rgba(255,255,255,0));
-        }
+        
         .footer-brand-text { line-height: 1.4; }
         .footer-app {
             display: block;
@@ -901,8 +893,6 @@ $professions = [
             .about-points, .contact-grid { grid-template-columns: 1fr 1fr; }
             .site-footer .container { flex-wrap: wrap; justify-content: center; text-align: center; }
             .footer-brand { flex-direction: column; gap: 12px; }
-            .footer-brand img { height: 56px; padding: 7px 11px; }
-            .footer-divider { display: none; }
             .footer-brand-text strong { margin-top: 0; }
             .footer-copy { order: 3; width: 100%; }
         }
@@ -953,7 +943,6 @@ $professions = [
             .job-banner-text { left: 22px; right: 22px; max-width: none; }
             .job-banner-title { font-size: 18px; }
             .job-banner-subtitle { font-size: 13px; margin-top: 6px; }
-            .footer-brand img { height: 62px; max-width: 86vw; }
             .apply-header h2 { font-size: 20px; }
             .apply-step { padding: 16px 0; }
             .apply-step .step-number { width: 48px; height: 48px; font-size: 16px; border-radius: 50%; }
@@ -1026,8 +1015,16 @@ $professions = [
             </div>
 
             <div class="job-grid">
-                <?php foreach ($professions as $i => $prof): ?>
-                    <a class="job-banner reveal" href="<?= BASE_URL ?>/public/browse-jobs.php" style="--rd: <?= number_format($i * 0.06, 2) ?>s" aria-label="<?= e($prof['title']) ?> — browse open positions">
+                <?php foreach ($professions as $i => $prof):
+                    $jobId = $openJobIds[strtolower(trim((string) $prof['title']))] ?? null;
+                    // If the matching posting no longer exists or is closed,
+                    // hide that career opportunity rather than linking to a
+                    // broken job_detail.php page.
+                    if ($jobId === null) {
+                        continue;
+                    }
+                ?>
+                    <a class="job-banner reveal" href="<?= BASE_URL ?>/public/job_detail.php?id=<?= (int) $jobId ?>" style="--rd: <?= number_format($i * 0.06, 2) ?>s" aria-label="View <?= e($prof['title']) ?> job">
                         <img class="job-banner-img" src="<?= e($prof['img']) ?>" alt="<?= e($prof['alt']) ?>">
                         <div class="job-banner-shade" aria-hidden="true"></div>
                         <span class="job-banner-text">
@@ -1164,8 +1161,6 @@ $professions = [
     <footer class="site-footer">
         <div class="container container-wide">
             <div class="footer-brand">
-                <img src="../assets/images/tri-m-logo.png" alt="TRI-M GLOBAL — Logistics &amp; Trading Inc.">
-                <span class="footer-divider" aria-hidden="true"></span>
                 <div class="footer-brand-text">
                     <span class="footer-app">Merchandising Management System</span>
                     <strong>TRI-M GLOBAL</strong>

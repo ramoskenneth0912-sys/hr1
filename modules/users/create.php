@@ -76,7 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $userId = (int) db()->lastInsertId();
 
-        securityLog('user_account_created', "user_id={$userId} employee_id={$employee_id} role={$role}", (int) ($_SESSION['user_id'] ?? 0));
+        securityLog('USER_CREATED', "Created account {$username} (role={$role}) linked to employee_id={$employee_id}", (int) ($_SESSION['user_id'] ?? 0), [
+            'module'      => 'users',
+            'target_type' => 'user',
+            'target_id'   => $userId,
+            'status'      => 'success',
+        ]);
 
         flash('success', 'User account created successfully.');
         redirect(BASE_URL . '/modules/users/index.php');

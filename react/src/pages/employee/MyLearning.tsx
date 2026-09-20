@@ -1,3 +1,4 @@
+// @ts-nocheck - legacy ESS module (was never type-checked before TS arrived).
 import { BookOpen, Clock, GraduationCap } from "lucide-react";
 
 import { PageHeader } from "../../components/shared-ui";

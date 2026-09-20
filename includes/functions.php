@@ -96,9 +96,6 @@ function formatDate(?string $date): string
     return date('M d, Y', strtotime($date));
 }
 
-/**
- * True if the string is a valid date in strict Y-m-d format.
- */
 function isValidDateString(string $d): bool
 {
     return $d !== ''

@@ -49,7 +49,7 @@ class Auth
     {
         $stmt = db()->prepare(
             'SELECT id, username, email, role, password_hash FROM users
-             WHERE (username = :uname OR email = :uemail) AND is_active = 1 LIMIT 1'
+             WHERE (username = :uname OR email = :uemail) AND is_active = 1 AND is_archived = 0 LIMIT 1'
         );
         $stmt->execute([':uname' => $credential, ':uemail' => $credential]);
         $user = $stmt->fetch();
@@ -156,7 +156,7 @@ class Auth
             $stmt = db()->prepare(
                 'SELECT u.id, u.username, u.email, u.role
                  FROM api_tokens t JOIN users u ON u.id = t.user_id
-                 WHERE t.token_hash = :h AND t.revoked_at IS NULL AND t.expires_at > NOW() AND u.is_active = 1
+                 WHERE t.token_hash = :h AND t.revoked_at IS NULL AND t.expires_at > NOW() AND u.is_active = 1 AND u.is_archived = 0
                  LIMIT 1'
             );
             $stmt->execute([':h' => hash('sha256', $token)]);
@@ -176,7 +176,7 @@ class Auth
             if (!empty($_SESSION['user_id'])) {
                 self::$authMethod = 'session';
                 $stmt = db()->prepare(
-                    'SELECT id, username, email, role FROM users WHERE id = :id AND is_active = 1 LIMIT 1'
+                    'SELECT id, username, email, role FROM users WHERE id = :id AND is_active = 1 AND is_archived = 0 LIMIT 1'
                 );
                 $stmt->execute([':id' => (int) $_SESSION['user_id']]);
                 $user = $stmt->fetch();

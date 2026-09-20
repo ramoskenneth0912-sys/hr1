@@ -35,6 +35,7 @@ $oldEmail = '';
 $oldPhone = '';
 $oldAddress = '';
 $oldCoverLetter = '';
+$clMethod = 'write';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_require();
@@ -50,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $oldEmail = trim($_POST['email'] ?? '');
     $oldPhone = trim($_POST['phone'] ?? '');
     $oldAddress = trim($_POST['address'] ?? '');
-    $oldCoverLetter = trim($_POST['cover_letter'] ?? '');
+    $clMethod = $_POST['cover_letter_method'] ?? '';
 
     if ($oldName === '') {
         $errors[] = 'Full name is required.';
@@ -60,6 +61,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($oldPhone === '') {
         $errors[] = 'Contact number is required.';
+    }
+
+    // ---- Cover letter: the applicant must provide ONE, either as an uploaded
+    // file ('upload') or as written text ('write'). The radio value is never
+    // trusted alone — the corresponding value is validated server-side below.
+    $oldCoverLetter = trim($_POST['cover_letter'] ?? '');
+    $clUploadedValid = false;
+    $clExt = '';
+    $clFile = null;
+
+    if (!in_array($clMethod, ['upload', 'write'], true)) {
+        $errors[] = 'Cover letter is required.';
+        $clMethod = 'write';
+    } elseif ($clMethod === 'write') {
+        if ($oldCoverLetter === '') {
+            $errors[] = 'Please write a cover letter.';
+        }
+        if (mb_strlen($oldCoverLetter) > 4000) {
+            $errors[] = 'Cover letter is too long (maximum 4000 characters).';
+        }
+    } else {
+        // 'upload' — identical security rules to the resume: extension + MIME
+        // allowlist, size cap, randomized stored name, move_uploaded_file().
+        if (empty($_FILES['cover_letter_file']) || $_FILES['cover_letter_file']['error'] === UPLOAD_ERR_NO_FILE) {
+            $errors[] = 'Please upload a cover letter.';
+        } else {
+            $clFile = $_FILES['cover_letter_file'];
+            if ($clFile['error'] !== UPLOAD_ERR_OK) {
+                $errors[] = 'Cover letter upload failed. Please try again.';
+            } elseif ((int) ($clFile['size'] ?? 0) <= 0) {
+                $errors[] = 'The uploaded cover letter is empty.';
+            } elseif ((int) $clFile['size'] > RESUME_MAX_BYTES) {
+                $errors[] = 'Cover letter is too large. Maximum size is 5 MB.';
+            } else {
+                $clExt = strtolower(pathinfo($clFile['name'], PATHINFO_EXTENSION));
+                if (!in_array($clExt, ['pdf', 'doc', 'docx'], true)) {
+                    $errors[] = 'Cover letter must be a PDF, DOC, or DOCX file.';
+                } else {
+                    $clAllowedMimes = [
+                        'application/pdf',
+                        'application/msword',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    ];
+                    $clFinfo = new finfo(FILEINFO_MIME_TYPE);
+                    $clMime = $clFinfo->file($clFile['tmp_name']);
+                    if (!in_array($clMime, $clAllowedMimes, true)) {
+                        $errors[] = 'Uploaded file type is not allowed.';
+                    } else {
+                        $clUploadedValid = true;
+                    }
+                }
+            }
+        }
     }
 
     if (!isset($_FILES['resume']) || $_FILES['resume']['error'] !== UPLOAD_ERR_OK) {
@@ -99,22 +153,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Randomized stored name (allowlisted extension) — avoids predictable,
         // user-controlled filenames and any path/traversal ambiguity.
+        $resumeStoredName = null;
         if (!isset($ext) || !in_array($ext, ['pdf', 'doc', 'docx'], true)) {
             $errors[] = 'Uploaded file type is not allowed.';
         } else {
-            $storedName = $applicantNo . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
-            $storedPath = 'uploads/' . $storedName;
+            $resumeStoredName = $applicantNo . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            if (!move_uploaded_file($_FILES['resume']['tmp_name'], $uploadDir . '/' . $resumeStoredName)) {
+                $resumeStoredName = null;
+                $errors[] = 'Failed to upload file. Please try again.';
+            }
+        }
 
-            if (move_uploaded_file($_FILES['resume']['tmp_name'], $uploadDir . '/' . $storedName)) {
+        // Cover letter file — only when the 'upload' method was verified above.
+        $clStoredName = null;
+        if (empty($errors) && $clUploadedValid) {
+            $clStoredName = $applicantNo . '_cl_' . bin2hex(random_bytes(8)) . '.' . $clExt;
+            if (!move_uploaded_file($clFile['tmp_name'], $uploadDir . '/' . $clStoredName)) {
+                $clStoredName = null;
+                $errors[] = 'Failed to upload cover letter. Please try again.';
+            }
+        }
+
+        if (empty($errors)) {
+            try {
                 $insert = db()->prepare(
-                    'INSERT INTO applicants (user_id, applicant_no, first_name, last_name, email, phone, address, position_applied, department_id, job_posting_id, resume_path, status, applied_date, notes)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?)'
+                    'INSERT INTO applicants (user_id, applicant_no, first_name, last_name, email, phone, address, position_applied, department_id, job_posting_id, resume_path, status, applied_date, notes, cover_letter_method, cover_letter_path)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)'
                 );
 
                 $fullName = $oldName;
                 $nameParts = explode(' ', $fullName, 2);
                 $firstName = $nameParts[0];
                 $lastName = $nameParts[1] ?? '';
+
+                // Written letters stay in the existing notes column; uploaded
+                // letters store a path and leave notes NULL (method indicator
+                // tells the viewers which representation is authoritative).
+                $coverLetterText = $clMethod === 'write' ? $oldCoverLetter : null;
+                $coverLetterPath = $clStoredName !== null ? 'uploads/' . $clStoredName : null;
 
                 $insert->execute([
                     $loggedInUserId,
@@ -127,34 +203,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $job['title'],
                     $job['department_id'],
                     $job['id'],
-                    $storedPath,
+                    'uploads/' . $resumeStoredName,
                     'new',
-                    $oldCoverLetter,
+                    $coverLetterText,
+                    $clMethod,
+                    $coverLetterPath,
                 ]);
-
-                webRateLimitRecord($applyKey);
-
-                // Applicant + application successfully created with their CV.
-                // Now tell every active HR/Admin account via the existing
-                // notification bell. Runs after the insert succeeds so a failed
-                // submission never produces a "New Applicant" notification.
-                $newApplicantId = (int) db()->lastInsertId();
-                notifyHRofNewApplicant($newApplicantId, $fullName, $job['title']);
-
-                // AUTOMATIC AI resume matching: compare the uploaded CV against
-                // this job right away and store the 0-100 match result for the
-                // applicants list. autoScreenApplicant() never throws and never
-                // blocks submission — on any failure it is recorded as
-                // "Unavailable" and the applicant/application stay intact.
-                try {
-                    autoScreenApplicant($newApplicantId);
-                } catch (Throwable $e) {
-                    error_log('[apply.php] automatic AI screening skipped for applicant_id=' . $newApplicantId . ': ' . $e->getMessage());
+            } catch (PDOException $ex) {
+                // Never leave orphan files behind when the insert fails.
+                if ($resumeStoredName !== null) {
+                    @unlink($uploadDir . '/' . $resumeStoredName);
                 }
+                if ($clStoredName !== null) {
+                    @unlink($uploadDir . '/' . $clStoredName);
+                }
+                throw $ex;
+            }
 
-                redirect(BASE_URL . '/public/thank_you.php');
-            } else {
-                $errors[] = 'Failed to upload file. Please try again.';
+            webRateLimitRecord($applyKey);
+
+            // Applicant + application successfully created with their CV.
+            // Now tell every active HR/Admin account via the existing
+            // notification bell. Runs after the insert succeeds so a failed
+            // submission never produces a "New Applicant" notification.
+            $newApplicantId = (int) db()->lastInsertId();
+            notifyHRofNewApplicant($newApplicantId, $fullName, $job['title']);
+
+            // AUTOMATIC AI resume matching: compare the uploaded CV against
+            // this job right away and store the 0-100 match result for the
+            // applicants list. autoScreenApplicant() never throws and never
+            // blocks submission — on any failure it is recorded as
+            // "Unavailable" and the applicant/application stay intact.
+            try {
+                autoScreenApplicant($newApplicantId);
+            } catch (Throwable $e) {
+                error_log('[apply.php] automatic AI screening skipped for applicant_id=' . $newApplicantId . ': ' . $e->getMessage());
+            }
+
+            redirect(BASE_URL . '/public/thank_you.php');
+        } else {
+            // Validation failed after files were moved — clean both up.
+            if ($resumeStoredName !== null) {
+                @unlink($uploadDir . '/' . $resumeStoredName);
+            }
+            if ($clStoredName !== null) {
+                @unlink($uploadDir . '/' . $clStoredName);
             }
         }
     }
@@ -270,6 +363,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--muted);
             margin-top: .2rem;
         }
+        .cl-methods {
+            display: flex;
+            flex-direction: column;
+            gap: .55rem;
+            margin-bottom: .85rem;
+        }
+        .cl-method {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            padding: .7rem .95rem;
+            border: 1px solid #E7E5EE;
+            border-radius: 10px;
+            background: #fff;
+            cursor: pointer;
+            font-size: .9rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            transition: border-color .2s ease, background .2s ease;
+        }
+        .cl-method:hover { border-color: var(--pub-brand); }
+        .cl-method input {
+            accent-color: var(--pub-brand);
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .cl-method:has(input:checked) {
+            border-color: var(--pub-brand);
+            background: var(--purple-bg);
+        }
+        .cl-pane[hidden] { display: none !important; }
+        .cl-write-hint {
+            font-size: .82rem;
+            color: var(--muted);
+            margin: 0 0 .55rem;
+            line-height: 1.5;
+        }
+        .cl-file-selected {
+            margin-top: .55rem;
+            font-size: .85rem;
+            color: var(--text-dark);
+            background: var(--purple-bg);
+            border: 1px dashed rgba(123, 44, 191, .35);
+            border-radius: 8px;
+            padding: .55rem .8rem;
+        }
         .apply-container { animation: applyIn .55s ease both; }
         @keyframes applyIn {
             from { opacity: 0; transform: translateY(14px); }
@@ -349,8 +491,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <textarea id="address" name="address" rows="2" placeholder="Street, Barangay, City, Province"><?= e($oldAddress) ?></textarea>
                     </div>
                     <div class="form-group full-width">
-                        <label for="cover_letter">Cover Letter / Message</label>
-                        <textarea id="cover_letter" name="cover_letter" rows="5" placeholder="Tell us why you're a great fit for this position."><?= e($oldCoverLetter) ?></textarea>
+                        <label for="cover_letter">Cover Letter <span style="color:var(--danger)">*</span></label>
+                        <div class="cl-methods" role="radiogroup" aria-label="Choose how you want to provide your cover letter">
+                            <label class="cl-method">
+                                <input type="radio" name="cover_letter_method" value="upload" id="cl_method_upload" <?= $clMethod === 'upload' ? 'checked' : '' ?>>
+                                <span>Upload a cover letter</span>
+                            </label>
+                            <label class="cl-method">
+                                <input type="radio" name="cover_letter_method" value="write" id="cl_method_write" <?= $clMethod !== 'upload' ? 'checked' : '' ?>>
+                                <span>Write a cover letter</span>
+                            </label>
+                        </div>
+                        <div class="cl-pane" id="cl_upload_pane" <?= $clMethod === 'upload' ? '' : 'hidden' ?>>
+                            <input type="file" id="cover_letter_file" name="cover_letter_file" accept=".pdf,.doc,.docx" required>
+                            <div class="form-hint">Accepted formats: PDF, DOC, DOCX (Max 5MB)</div>
+                            <div class="cl-file-selected" id="cl_file_selected" hidden>Selected: <span id="cl_file_name"></span></div>
+                        </div>
+                        <div class="cl-pane" id="cl_write_pane" <?= $clMethod === 'upload' ? 'hidden' : '' ?>>
+                            <p class="cl-write-hint">Introduce yourself and briefly explain why you are suitable for this role. Consider your relevant skills, qualifications and related experience.</p>
+                            <textarea id="cover_letter" name="cover_letter" rows="6" maxlength="4000" required placeholder="Dear Hiring Manager, ..."><?= e($oldCoverLetter) ?></textarea>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="position">Preferred Position <span style="color:var(--danger)">*</span></label>
@@ -373,5 +533,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <footer class="public-footer">
         &copy; <?= date('Y') ?> TRI-M Global Logistics &amp; Trading Inc. All rights reserved.
     </footer>
+    <script>
+    (function () {
+        var methodInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="cover_letter_method"]'));
+        var uploadPane = document.getElementById('cl_upload_pane');
+        var writePane = document.getElementById('cl_write_pane');
+        var fileInput = document.getElementById('cover_letter_file');
+        var letterBox = document.getElementById('cover_letter');
+        var fileSelected = document.getElementById('cl_file_selected');
+        var fileName = document.getElementById('cl_file_name');
+
+        function activeMethod() {
+            for (var i = 0; i < methodInputs.length; i++) {
+                if (methodInputs[i].checked) { return methodInputs[i].value; }
+            }
+            return 'write';
+        }
+
+        function sync() {
+            var m = activeMethod();
+            uploadPane.hidden = m !== 'upload';
+            writePane.hidden = m !== 'write';
+            fileInput.disabled = m !== 'upload';
+            letterBox.disabled = m !== 'write';
+            fileInput.required = m === 'upload';
+            letterBox.required = m === 'write';
+            fileInput.setCustomValidity(m !== 'upload' || fileInput.files.length ? '' : 'Please upload a cover letter.');
+            letterBox.setCustomValidity(m !== 'write' || letterBox.value.trim() ? '' : 'Please write a cover letter.');
+        }
+
+        methodInputs.forEach(function (r) { r.addEventListener('change', sync); });
+
+        letterBox.addEventListener('input', function () {
+            if (letterBox.value.trim()) { letterBox.setCustomValidity(''); }
+        });
+
+        fileInput.addEventListener('change', function () {
+            if (fileInput.files.length) {
+                fileInput.setCustomValidity('');
+                fileName.textContent = fileInput.files[0].name;
+                fileSelected.hidden = false;
+            } else {
+                fileInput.setCustomValidity('Please upload a cover letter.');
+                fileSelected.hidden = true;
+            }
+        });
+
+        sync();
+    })();
+    </script>
 </body>
 </html>

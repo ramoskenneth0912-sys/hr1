@@ -96,7 +96,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
         }
 
-        securityLog('user_account_updated', "user_id={$user_id} role={$old['role']} active={$old['is_active']}", (int) ($_SESSION['user_id'] ?? 0));
+        $actorId    = (int) ($_SESSION['user_id'] ?? 0);
+        $prevRole   = (string) ($user['role'] ?? 'employee');
+        $newRole    = (string) $old['role'];
+        $prevActive = (int) ($user['is_active'] ?? 1);
+        $newActive  = (int) $old['is_active'];
+        $passwordSet = $password !== '';
+
+        $auditCtx = [
+            'module'      => 'users',
+            'target_type' => 'user',
+            'target_id'   => $user_id,
+            'status'      => 'success',
+        ];
+
+        $changed = [];
+        if ($old['username'] !== $user['username']) $changed[] = 'username';
+        if ($old['email'] !== $user['email']) $changed[] = 'email';
+
+        if ($newActive !== $prevActive) {
+            $changed[] = 'status';
+            securityLog($newActive === 1 ? 'USER_REACTIVATED' : 'USER_DEACTIVATED',
+                ($newActive === 1 ? 'Reactivated' : 'Deactivated') . " account \"{$old['username']}\"",
+                $actorId, $auditCtx);
+        }
+        if ($newRole !== $prevRole) {
+            $changed[] = 'role';
+            securityLog('USER_ROLE_CHANGED',
+                "Changed role for \"{$old['username']}\" from {$prevRole} to {$newRole}",
+                $actorId, $auditCtx);
+        }
+        if ($passwordSet) {
+            $changed[] = 'password';
+            securityLog('USER_PASSWORD_RESET',
+                "Administrator reset the password for \"{$old['username']}\"",
+                $actorId, $auditCtx);
+        }
+
+        $summary = $changed !== []
+            ? 'Updated ' . implode(', ', $changed) . " for \"{$old['username']}\""
+            : "No field changes submitted for \"{$old['username']}\"";
+        securityLog('USER_UPDATED', $summary, $actorId, $auditCtx);
 
         flash('success', 'User account updated successfully.');
         redirect(BASE_URL . '/modules/users/index.php');

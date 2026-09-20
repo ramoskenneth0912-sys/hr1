@@ -15,13 +15,15 @@ $sql = "SELECT u.*, e.first_name, e.last_name, e.employee_no,
         LEFT JOIN departments d ON e.department_id = d.id";
 
 $params = [];
+$where = ['u.is_archived = 0'];
 if ($search !== '') {
-    $sql .= " WHERE (u.username LIKE ? OR e.first_name LIKE ? OR e.last_name LIKE ?)";
+    $where[] = "(u.username LIKE ? OR e.first_name LIKE ? OR e.last_name LIKE ?)";
     $params[] = "%$search%";
     $params[] = "%$search%";
     $params[] = "%$search%";
 }
 
+$sql .= ' WHERE ' . implode(' AND ', $where);
 $sql .= " ORDER BY u.created_at DESC";
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -33,7 +35,11 @@ $users = $stmt->fetchAll();
         <h1 class="page-title">User Management</h1>
         <p class="page-subtitle">System Account &amp; Access Management</p>
     </div>
-    <a href="<?= BASE_URL ?>/modules/users/create.php" class="btn btn-primary">+ New Account</a>
+    <div class="btn-group">
+        <a href="<?= BASE_URL ?>/modules/users/audit_log.php" class="btn btn-outline">Audit Log</a>
+        <a href="<?= BASE_URL ?>/modules/users/archive.php" class="btn btn-outline">Archived Users</a>
+        <a href="<?= BASE_URL ?>/modules/users/create.php" class="btn btn-primary">+ New Account</a>
+    </div>
 </div>
 
 <section class="panel fade-in-up" style="animation-delay:.1s">
@@ -92,6 +98,20 @@ $users = $stmt->fetchAll();
                         <td class="actions">
                             <a href="<?= BASE_URL ?>/modules/users/edit.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm btn-outline">Edit</a>
                             <a href="<?= BASE_URL ?>/modules/users/delete.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm" style="color:var(--danger);">Deactivate</a>
+                            <a href="<?= BASE_URL ?>/modules/users/archive.php?confirm=archive&id=<?= (int) $u['id'] ?>" class="btn btn-sm btn-outline">Archive</a>
+                            <?php
+                            $removeConfirm = 'Remove User Account?\n\nAre you sure you want to remove this user? This action cannot be undone.\n\nAccount: ' . $u['username'];
+                            if (!empty($u['first_name'])) {
+                                $removeConfirm .= ' (' . trim($u['first_name'] . ' ' . $u['last_name']) . ')';
+                            }
+                            ?>
+                            <form method="post" action="<?= BASE_URL ?>/modules/users/remove.php" class="inline-form" style="display:inline;margin:0;"
+                                  onsubmit="return confirm('<?= e($removeConfirm) ?>');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
+                                <input type="hidden" name="confirm" value="yes">
+                                <button type="submit" class="btn btn-sm btn-danger"<?= ((int) $u['id'] === (int) ($_SESSION['user_id'] ?? 0)) ? ' disabled title="You cannot remove your own account."' : '' ?>>Remove</button>
+                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>

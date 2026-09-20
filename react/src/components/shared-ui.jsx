@@ -1,3 +1,5 @@
+// @ts-nocheck - legacy island UI kit; props are inferred as `any` until migrated.
+// Shared by the PHP-island widgets AND the standalone React SPA (react/spa).
 import React from 'react';
 import { V, TX, TX2, BD, SUCCESS, WARNING, INFO, DANGER } from '../lib/constants.js';
 

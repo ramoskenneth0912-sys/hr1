@@ -35,7 +35,7 @@ function passwordResetRequest(string $email, ?string $ip = null): string
         return 'If an account exists with that email, an approval request has been sent to HR.';
     }
 
-    $stmt = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1');
+    $stmt = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1 AND is_archived = 0');
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
@@ -241,12 +241,12 @@ function passwordResetValidateToken(string $rawToken): ?string
 function passwordResetApply(string $email, string $newPassword): bool
 {
     $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-    $stmt = db()->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE email = ? AND is_active = 1');
+    $stmt = db()->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE email = ? AND is_active = 1 AND is_archived = 0');
     $stmt->execute([$hash, $email]);
     $applied = $stmt->rowCount() > 0;
 
     if ($applied) {
-        $stmt2 = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1');
+        $stmt2 = db()->prepare('SELECT id FROM users WHERE email = ? AND is_active = 1 AND is_archived = 0');
         $stmt2->execute([$email]);
         $user = $stmt2->fetch();
         if ($user) {

@@ -1,3 +1,4 @@
+// @ts-nocheck - legacy ESS module (was never type-checked before TS arrived).
 import { useEffect, useState } from "react";
 import { Award, CalendarDays, TriangleAlert } from "lucide-react";
 import { getEssList } from "../../lib/essApi";

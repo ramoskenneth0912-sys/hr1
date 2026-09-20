@@ -32,6 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!webRateLimit($loginKey)) {
         $error = 'Too many failed login attempts. Please try again in 15 minutes.';
+        securityLog('LOGIN_FAILED', 'Rate limit exceeded (too many failed attempts)', null, [
+            'module' => 'auth',
+            'status' => 'failure',
+        ]);
     } else {
         $credential = trim($_POST['credential'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -40,14 +44,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Please enter both username/email and password.';
         } else {
             try {
-                $stmt = db()->prepare('SELECT id, username, email, role, password_hash FROM users WHERE (username = ? OR email = ?) AND is_active = 1 LIMIT 1');
+                $stmt = db()->prepare('SELECT id, username, email, role, password_hash FROM users WHERE (username = ? OR email = ?) AND is_active = 1 AND is_archived = 0 LIMIT 1');
                 $stmt->execute([$credential, $credential]);
                 $user = $stmt->fetch();
 
                 if ($user && password_verify($password, $user['password_hash'])) {
                     webRateLimitReset($loginKey);
                     error_log('HR1 LOGIN OK: ip=' . ($_SERVER['REMOTE_ADDR'] ?? '?') . ' user_id=' . $user['id'] . ' role=' . $user['role'] . ' time=' . date('c'));
-                    securityLog('login_success', "role={$user['role']}", (int) $user['id']);
+                    securityLog('LOGIN_SUCCESS', "Signed in as {$user['username']}", (int) $user['id'], [
+                        'username'    => $user['username'],
+                        'role'        => $user['role'],
+                        'module'      => 'auth',
+                        'target_type' => 'user',
+                        'target_id'   => (int) $user['id'],
+                        'status'      => 'success',
+                    ]);
 
                     session_regenerate_id(true);
                     csrf_rotate();
@@ -68,7 +79,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 webRateLimitRecord($loginKey);
                 error_log('HR1 LOGIN FAIL: ip=' . ($_SERVER['REMOTE_ADDR'] ?? '?') . ' user=' . $credential . ' time=' . date('c'));
-                securityLog('login_fail', "credential=" . substr($credential, 0, 50));
+                securityLog('LOGIN_FAILED', 'Invalid credentials (credential=' . substr($credential, 0, 50) . ')', null, [
+                    'module' => 'auth',
+                    'status' => 'failure',
+                ]);
                 $error = 'Invalid username/email or password.';
             } catch (PDOException $ex) {
                 $error = 'Login system unavailable. Please try again later.';
