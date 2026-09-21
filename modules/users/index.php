@@ -99,19 +99,6 @@ $users = $stmt->fetchAll();
                             <a href="<?= BASE_URL ?>/modules/users/edit.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm btn-outline">Edit</a>
                             <a href="<?= BASE_URL ?>/modules/users/delete.php?id=<?= (int) $u['id'] ?>" class="btn btn-sm" style="color:var(--danger);">Deactivate</a>
                             <a href="<?= BASE_URL ?>/modules/users/archive.php?confirm=archive&id=<?= (int) $u['id'] ?>" class="btn btn-sm btn-outline">Archive</a>
-                            <?php
-                            $removeConfirm = 'Remove User Account?\n\nAre you sure you want to remove this user? This action cannot be undone.\n\nAccount: ' . $u['username'];
-                            if (!empty($u['first_name'])) {
-                                $removeConfirm .= ' (' . trim($u['first_name'] . ' ' . $u['last_name']) . ')';
-                            }
-                            ?>
-                            <form method="post" action="<?= BASE_URL ?>/modules/users/remove.php" class="inline-form" style="display:inline;margin:0;"
-                                  onsubmit="return confirm('<?= e($removeConfirm) ?>');">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="id" value="<?= (int) $u['id'] ?>">
-                                <input type="hidden" name="confirm" value="yes">
-                                <button type="submit" class="btn btn-sm btn-danger"<?= ((int) $u['id'] === (int) ($_SESSION['user_id'] ?? 0)) ? ' disabled title="You cannot remove your own account."' : '' ?>>Remove</button>
-                            </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
