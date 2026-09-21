@@ -101,6 +101,16 @@ $employees = db()->query(
         <p class="page-subtitle">Employee &amp; Employment Management</p>
     </div>
     <div class="btn-group">
+        <form method="get" action="view.php" class="inline-form" style="margin:0;">
+            <select name="id" aria-label="Search Employee" data-emp-search data-emp-autosubmit>
+                <option value="">Search Employee</option>
+                <?php foreach ($employees as $emp): ?>
+                <option value="<?= (int) $emp['id'] ?>" data-emp-no="<?= e($emp['employee_no']) ?>">
+                    <?= e($emp['employee_no'] . ' — ' . $emp['first_name'] . ' ' . $emp['last_name']) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
         <a href="terminated.php" class="btn btn-outline">Terminated Employees</a>
         <a href="create.php" class="btn btn-primary">+ New Employee</a>
     </div>

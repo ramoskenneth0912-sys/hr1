@@ -18,6 +18,7 @@ define('API_MAX_UPLOAD_BYTES', 5 * 1024 * 1024);   // 5 MB, matches website form
 
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/includes/functions.php'; // e(), generateCode() — side-effect free
+require_once BASE_PATH . '/includes/integration.php'; // hr1_default_employee_no(), hr1_resolve_employee_no()
 require_once __DIR__ . '/lib/Response.php';
 require_once __DIR__ . '/lib/RateLimit.php';
 require_once __DIR__ . '/lib/Auth.php';

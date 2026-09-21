@@ -47,6 +47,13 @@ $sort      = trim((string) ($_GET['sort'] ?? ''));
 $match = in_array($match, ['strong', 'moderate', 'low'], true) ? $match : '';
 $sort  = in_array($sort, ['match_high', 'match_low'], true) ? $sort : '';
 
+// Optional "new applicant" notification target. Only marks a row already
+// visible in the fully authorized list below — it never authorizes access
+// and never fetches applicant data by itself.
+$highlightId = isset($_GET['highlight']) && preg_match('/^[1-9]\d*$/', (string) $_GET['highlight'])
+    ? (int) $_GET['highlight']
+    : 0;
+
 // Build the base query with server-side filtering.
 $where  = ['1=1'];
 $params = [];
@@ -359,7 +366,7 @@ $filterQuery = http_build_query($qs);
                 $sc = $screeningMap[$row['id']] ?? null;
                 $stage = $row['_stage'];
             ?>
-            <tr>
+            <tr<?= (int) $row['id'] === $highlightId ? ' class="apps-row-highlight"' : '' ?>>
                 <td><?= e($row['applicant_no']) ?></td>
                 <td>
                     <a href="view.php?id=<?= (int) $row['id'] ?>" class="applicant-name"><?= e($row['first_name'] . ' ' . $row['last_name']) ?></a>
@@ -633,6 +640,12 @@ $filterQuery = http_build_query($qs);
 .fade-in-up.apps-panel { animation: none !important; opacity: 1 !important; transform: none !important; }
 .apps-table tbody tr { animation: none !important; opacity: 1 !important; transform: none !important; }
 
+/* New-applicant notification target: a subtle purple row accent so the bell
+   recipient can immediately spot which applicant generated the notification.
+   Presentation-only — never persisted and never alters applicant data. */
+.data-table tbody tr.apps-row-highlight td { background: var(--purple-soft); }
+.data-table tbody tr.apps-row-highlight td:first-child { box-shadow: inset 3px 0 0 var(--purple-light); }
+
 /* Options dropdown — fixed positioning so the menu escapes the .table-wrap
    overflow container and can never be clipped by it or the viewport. */
 .apps-menu { position: relative; display: inline-block; }
@@ -801,6 +814,16 @@ document.addEventListener('keydown', function (e) {
         var btns = f.querySelectorAll('button[type="submit"]');
         for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
     });
+})();
+
+/* New-applicant notification target: bring the highlighted applicant row into
+   view so HR/Admin sees it immediately. Instant scroll — no animation. */
+(function () {
+    var row = document.querySelector('.apps-row-highlight');
+    if (!row) return;
+    if (typeof row.scrollIntoView === 'function') {
+        row.scrollIntoView({ block: 'center', inline: 'nearest' });
+    }
 })();
 </script>
 

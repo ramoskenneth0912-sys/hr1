@@ -165,6 +165,22 @@ class PerformanceController
         }
     }
 
+    /**
+     * Resolve an employee number (e.g. E001) to the internal employees.id.
+     * 404 for an unknown number. Returns int when found.
+     */
+    private static function employeeIdFromParam(?string $employeeNo): int
+    {
+        if ($employeeNo === null || trim($employeeNo) === '') {
+            Response::validation(['employee_no' => 'employee_no is required and can not be empty.'], 'Validation failed.');
+        }
+        $employee = hr1_resolve_employee_no($employeeNo);
+        if ($employee === null) {
+            Response::notFound('Employee not found.');
+        }
+        return (int) $employee['id'];
+    }
+
     /** Fetch the caller's own review (null when absent / not owned). */
     private static function ownRow(int $employeeId, int $reviewId): ?array
     {
@@ -663,8 +679,20 @@ class PerformanceController
     {
         $ctx = self::adminCtx();
         $employeeId = (int) (api_query('employee_id') ?? 0);
+        $employeeNo = api_query('employee_no');
+        if ($employeeNo !== null) {
+            $employeeId = self::employeeIdFromParam($employeeNo);
+        } elseif ($employeeId <= 0) {
+            $defaultNo = hr1_default_employee_no();
+            if ($defaultNo !== '') {
+                $employeeId = self::employeeIdFromParam($defaultNo);
+            }
+        }
         if ($employeeId <= 0) {
-            Response::validation(['employee_id' => 'employee_id query parameter is required.'], 'Validation failed.');
+            Response::validation(
+                ['employee_id' => 'Provide employee_id or employee_no, or configure system_settings.default_employee_no.'],
+                'Validation failed.'
+            );
         }
         self::checkEmployeeScope($employeeId, $ctx);
 
@@ -713,6 +741,10 @@ class PerformanceController
         $status = api_query('status');
         $departmentId = api_query('department_id');
         $employeeId = api_query('employee_id');
+        $employeeNo = api_query('employee_no');
+        if ($employeeNo !== null) {
+            $employeeId = self::employeeIdFromParam($employeeNo);
+        }
         if ($periodId !== null) {
             $where[] = 'p.period_id = :period_id';
             $params[':period_id'] = self::intOrError($periodId, 'period_id');

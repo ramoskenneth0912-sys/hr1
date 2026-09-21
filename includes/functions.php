@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/environment.php';
 
+require_once __DIR__ . '/hr3_client.php';
+
 require_once __DIR__ . '/session.php';
 
 require_once __DIR__ . '/../config/database.php';
@@ -293,7 +295,8 @@ function notifyUser(?int $userId, string $title, string $message, ?string $link 
  * Notify every active HR/Admin account that a new applicant submitted an
  * application together with a resume/CV. Uses the SAME role set as
  * requireHRorManager() ('hr' and 'manager'). The bell link points at the
- * applicant detail page, which re-enforces server-side authorization.
+ * applicants list so HR/Admin can review the screening/AI score before
+ * opening the applicant's complete information.
  * Fails silently — a notification must never break the submission flow.
  */
 function notifyHRofNewApplicant(int $applicantId, string $applicantName, string $position): void
@@ -303,7 +306,7 @@ function notifyHRofNewApplicant(int $applicantId, string $applicantName, string 
     $applicantName = $applicantName !== '' ? $applicantName : 'An applicant';
     $position      = $position !== '' ? $position : 'a position';
 
-    $link = BASE_URL . '/modules/applicants/view.php?id=' . $applicantId;
+    $link = BASE_URL . '/modules/applicants/index.php?highlight=' . $applicantId;
 
     try {
         $stmt = db()->prepare('SELECT id FROM users WHERE role IN (?, ?) AND is_active = 1');

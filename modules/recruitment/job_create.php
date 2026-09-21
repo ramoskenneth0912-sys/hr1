@@ -168,7 +168,6 @@ require_once __DIR__ . '/../../includes/header.php';
             <input type="text" id="salary_compensation" name="salary_compensation" maxlength="200"
                    value="<?= e($_POST['salary_compensation'] ?? '') ?>"
                    placeholder="e.g. ₱20,000 – ₱25,000 per month">
-            <small style="font-size:.75rem;color:var(--muted);">Optional — enter the actual compensation for this position.</small>
         </div>
         <div class="form-group">
             <label for="closing_date">Application Closing Date *</label>
@@ -186,7 +185,6 @@ require_once __DIR__ . '/../../includes/header.php';
         <div class="form-group full-width">
             <label for="about_role">About the Role *</label>
             <textarea id="about_role" name="about_role" rows="4" required placeholder="Briefly describe the purpose of this position, its main responsibilities, and what the successful candidate will contribute to the organization."><?= e($_POST['about_role'] ?? '') ?></textarea>
-            <small style="font-size:.75rem;color:var(--muted);">A concise overview of why this position exists and what the employee will be responsible for.</small>
         </div>
         <div class="form-group full-width">
             <label for="description">Job Description *</label>
